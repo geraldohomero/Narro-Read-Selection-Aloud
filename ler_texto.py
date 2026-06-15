@@ -67,11 +67,68 @@ SPEED_STEP = 0.1
 # Formatação de texto
 # ============================================================================
 
+def _fix_spaced_letters(text):
+    """Corrige palavras com letras separadas por espaços (artefato de PDF).
+
+    Exemplos:
+        'c a m p o'     → 'campo'
+        'p r o f u n d a' → 'profunda'
+        'u m a'         → 'uma'
+        'u m'           → 'um'
+
+    Usa heurística: sequências de 3+ caracteres únicos separados por espaços
+    são provavelmente palavras quebradas. Para sequências de 2 caracteres
+    (como 'u m'), verifica contra uma lista de palavras comuns em português.
+    """
+    # Palavras curtas comuns que aparecem com espaços em PDFs
+    common_two_letter = {
+        'um', 'em', 'ao', 'ou', 'eu', 'se', 'de', 'da', 'do', 'no', 'na',
+        'os', 'as', 'me', 'te', 'lá', 'cá', 'já', 'há', 'ir', 'só', 'má',
+    }
+    common_three_letter = {
+        'uma', 'que', 'com', 'por', 'mas', 'dos', 'das', 'nos', 'nas',
+        'sua', 'seu', 'são', 'não', 'ele', 'ela', 'foi', 'ser', 'ter',
+        'sem', 'nem', 'até', 'sob', 'bem', 'sim', 'fim', 'diz', 'vem',
+    }
+
+    def replace_spaced(match):
+        spaced = match.group(0)
+        joined = spaced.replace(' ', '')
+        return joined
+
+    # Padrão: 3 ou mais letras individuais separadas por espaços
+    # Ex: "c a m p o" → captura como sequência de "letra espaço letra espaço..."
+    text = re.sub(
+        r'(?<![a-zA-ZÀ-ÿ])([a-zA-ZÀ-ÿ]) ([a-zA-ZÀ-ÿ])(?: ([a-zA-ZÀ-ÿ])){1,}(?![a-zA-ZÀ-ÿ])',
+        replace_spaced,
+        text
+    )
+
+    # Para "u m a" e similares com 3 letras: tratado acima
+    # Para "u m" e similares com 2 letras: tratamento específico
+    def replace_two_letter(match):
+        a, b = match.group(1), match.group(2)
+        joined = a + b
+        if joined.lower() in common_two_letter:
+            return joined
+        return match.group(0)  # Mantém como está se não for palavra conhecida
+
+    text = re.sub(
+        r'(?<![a-zA-ZÀ-ÿ])([a-zA-ZÀ-ÿ]) ([a-zA-ZÀ-ÿ])(?![a-zA-ZÀ-ÿ])',
+        replace_two_letter,
+        text
+    )
+
+    return text
+
+
 def format_text_for_tts(text):
     """Formata o texto para leitura TTS, removendo artefatos comuns de PDFs.
 
     - Remove caracteres de controle e invisíveis
-    - Junta palavras hifenizadas em quebra de linha (ex: 'pala-\nvra' → 'palavra')
+    - Junta palavras hifenizadas em quebra de linha (ex: 'pala-\\nvra' → 'palavra')
+    - Corrige letras separadas por espaços (kerning de PDF): 'c a m p o' → 'campo'
+    - Remove pontuação espúria após hifenização (ex: 'his-;' → 'his-')
     - Normaliza quebras de linha e espaços múltiplos
     - Remove espaços antes de pontuação
     - Remove linhas compostas apenas por números (numeração de páginas)
@@ -85,6 +142,9 @@ def format_text_for_tts(text):
     # Remove caracteres Unicode invisíveis (zero-width, soft hyphen, etc.)
     text = re.sub(r'[\u200b-\u200f\u2028-\u202f\u2060\ufeff\u00ad]', '', text)
 
+    # Remove pontuação espúria colada em hifenização: "his-;" → "his-"
+    text = re.sub(r'(\w)-[;,.:!?]+(\s)', r'\1-\2', text)
+
     # Junta palavras hifenizadas em quebra de linha: "pala-\nvra" → "palavra"
     text = re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', text)
 
@@ -96,6 +156,9 @@ def format_text_for_tts(text):
 
     # Normaliza espaços múltiplos em um só
     text = re.sub(r' {2,}', ' ', text)
+
+    # Corrige letras separadas por espaços (kerning de PDF)
+    text = _fix_spaced_letters(text)
 
     # Remove espaços antes de pontuação: "texto ." → "texto."
     text = re.sub(r'\s+([.,;:!?\)\]])', r'\1', text)
