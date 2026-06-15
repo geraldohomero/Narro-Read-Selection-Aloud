@@ -1,4 +1,4 @@
-# Narro RSA
+# Narro-RSA
 
 Leitor de texto em voz alta com **edge-tts** para o Okular no GNOME/Wayland (Fedora).
 
@@ -35,8 +35,8 @@ pipx install edge-tts
 ## 🚀 Instalação
 
 ```bash
-git clone https://github.com/SEU_USUARIO/edge-tts-okular.git
-cd edge-tts-okular
+git clone https://github.com/SEU_USUARIO/narro-rsa.git
+cd narro-rsa
 bash install.sh
 ```
 
@@ -44,7 +44,7 @@ O script `install.sh` copia os arquivos para `~/.local/bin/` e verifica as depen
 
 ## 🗑️ Desinstalação
 
-Para remover completamente o edge-tts-okular do sistema:
+Para remover completamente o Narro-RSA do sistema:
 
 ```bash
 bash uninstall.sh
@@ -52,7 +52,7 @@ bash uninstall.sh
 
 O script remove:
 - Scripts instalados em `~/.local/bin/`
-- Configurações salvas em `~/.config/edge-tts-okular/`
+- Configurações salvas em `~/.config/narro-rsa/`
 - Arquivos temporários em `/tmp/`
 - Processos em andamento
 
@@ -90,7 +90,7 @@ Abra: **Configurações → Teclado → Atalhos de teclado → Atalhos personali
 ## 📂 Estrutura
 
 ```
-edge-tts-okular/
+narro-rsa/
 ├── ler_texto.py       # App GTK principal (player com controles)
 ├── ler_texto.sh       # Wrapper shell para atalho do GNOME
 ├── parar_leitura.sh   # Script para interromper a leitura

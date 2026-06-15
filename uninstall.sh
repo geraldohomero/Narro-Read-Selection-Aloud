@@ -1,12 +1,12 @@
 #!/bin/bash
 # ============================================================================
-# uninstall.sh — Remove completamente o edge-tts-okular do sistema
+# uninstall.sh — Remove completamente o Narro-RSA do sistema
 # ============================================================================
 
 set -euo pipefail
 
 INSTALL_DIR="${HOME}/.local/bin"
-CONFIG_DIR="${HOME}/.config/edge-tts-okular"
+CONFIG_DIR="${HOME}/.config/narro-rsa"
 
 INSTALLED_FILES=(
     "$INSTALL_DIR/ler_texto.py"
@@ -15,12 +15,12 @@ INSTALLED_FILES=(
 )
 
 TMP_FILES=(
-    "/tmp/edge-tts-okular.mp3"
-    "/tmp/edge-tts-okular.lock"
-    "/tmp/edge-tts-okular-mpv.sock"
+    "/tmp/narro-rsa.mp3"
+    "/tmp/narro-rsa.lock"
+    "/tmp/narro-rsa-mpv.sock"
 )
 
-echo "🗑️  Desinstalação do edge-tts-okular"
+echo "🗑️  Desinstalação do Narro-RSA"
 echo ""
 
 # Mostra o que será removido
@@ -64,8 +64,8 @@ echo ""
 
 # 1. Para qualquer leitura em andamento
 echo "⏹  Parando processos em andamento…"
-pkill -f "mpv.*edge-tts-okular" 2>/dev/null || true
-pkill -f "edge-tts.*edge-tts-okular" 2>/dev/null || true
+pkill -f "mpv.*narro-rsa" 2>/dev/null || true
+pkill -f "edge-tts.*narro-rsa" 2>/dev/null || true
 pkill -f "ler_texto.py" 2>/dev/null || true
 
 # 2. Remove scripts instalados
@@ -94,7 +94,7 @@ for f in "${TMP_FILES[@]}"; do
 done
 
 echo ""
-echo "✅ edge-tts-okular foi completamente removido!"
+echo "✅ Narro-RSA foi completamente removido!"
 echo ""
 echo "📋 Lembrete: Remova manualmente os atalhos de teclado no GNOME:"
 echo "   Configurações → Teclado → Atalhos personalizados"

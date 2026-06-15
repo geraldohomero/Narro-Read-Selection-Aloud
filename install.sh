@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# install.sh — Instala o edge-tts-okular em ~/.local/bin
+# install.sh — Instala o Narro-RSA em ~/.local/bin
 # ============================================================================
 
 set -euo pipefail
@@ -8,7 +8,7 @@ set -euo pipefail
 INSTALL_DIR="${HOME}/.local/bin"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "📦 Instalando edge-tts-okular…"
+echo "📦 Instalando Narro-RSA…"
 echo ""
 
 # Verifica dependências

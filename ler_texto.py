@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-edge-tts-okular — Leitor TTS com interface gráfica GTK para Okular/GNOME (Wayland)
+Narro-RSA — Leitor TTS com interface gráfica GTK para Okular/GNOME (Wayland)
 
 Uso: Selecione texto no Okular → Ctrl+C → pressione o atalho global
      Uma janela GTK aparecerá com controles de play/pause/stop, voz e velocidade.
@@ -28,10 +28,10 @@ import re
 # ============================================================================
 
 EDGE_TTS_BIN = os.path.expanduser("~/.local/bin/edge-tts")
-TMP_AUDIO = "/tmp/edge-tts-okular.mp3"
-MPV_SOCKET = "/tmp/edge-tts-okular-mpv.sock"
-LOCKFILE = "/tmp/edge-tts-okular.lock"
-CONFIG_DIR = os.path.expanduser("~/.config/edge-tts-okular")
+TMP_AUDIO = "/tmp/narro-rsa.mp3"
+MPV_SOCKET = "/tmp/narro-rsa-mpv.sock"
+LOCKFILE = "/tmp/narro-rsa.lock"
+CONFIG_DIR = os.path.expanduser("~/.config/narro-rsa")
 CONFIG_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 VOICES = [
@@ -209,7 +209,7 @@ def kill_mpv():
     """Mata qualquer instância do mpv associada a este script."""
     try:
         subprocess.run(
-            ["pkill", "-f", "mpv.*edge-tts-okular"],
+            ["pkill", "-f", "mpv.*narro-rsa"],
             capture_output=True, timeout=3
         )
     except Exception:
@@ -263,7 +263,7 @@ class TTSPlayerWindow(Gtk.Window):
     """Janela principal do leitor TTS."""
 
     def __init__(self, initial_text=""):
-        super().__init__(title="Leitor TTS — edge-tts")
+        super().__init__(title="Narro-RSA")
         self.set_default_size(480, 360)
         self.set_position(Gtk.WindowPosition.CENTER_ALWAYS)
         self.set_border_width(14)
