@@ -20,6 +20,8 @@ import socket
 import os
 import sys
 import tempfile
+import time
+import re
 
 # ============================================================================
 # Configurações
@@ -62,6 +64,52 @@ SPEED_DEFAULT = 1.0
 SPEED_STEP = 0.1
 
 # ============================================================================
+# Formatação de texto
+# ============================================================================
+
+def format_text_for_tts(text):
+    """Formata o texto para leitura TTS, removendo artefatos comuns de PDFs.
+
+    - Remove caracteres de controle e invisíveis
+    - Junta palavras hifenizadas em quebra de linha (ex: 'pala-\nvra' → 'palavra')
+    - Normaliza quebras de linha e espaços múltiplos
+    - Remove espaços antes de pontuação
+    - Remove linhas compostas apenas por números (numeração de páginas)
+    """
+    if not text:
+        return ""
+
+    # Remove caracteres de controle (exceto \n e \t)
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+
+    # Remove caracteres Unicode invisíveis (zero-width, soft hyphen, etc.)
+    text = re.sub(r'[\u200b-\u200f\u2028-\u202f\u2060\ufeff\u00ad]', '', text)
+
+    # Junta palavras hifenizadas em quebra de linha: "pala-\nvra" → "palavra"
+    text = re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', text)
+
+    # Substitui quebras de linha por espaço
+    text = text.replace('\n', ' ').replace('\r', ' ')
+
+    # Substitui tabulações por espaço
+    text = text.replace('\t', ' ')
+
+    # Normaliza espaços múltiplos em um só
+    text = re.sub(r' {2,}', ' ', text)
+
+    # Remove espaços antes de pontuação: "texto ." → "texto."
+    text = re.sub(r'\s+([.,;:!?\)\]])', r'\1', text)
+
+    # Remove linhas que são apenas números (paginação de PDFs)
+    text = re.sub(r'\b\d{1,4}\b(?=\s|$)', '', text)
+
+    # Normaliza espaços novamente após remoções
+    text = re.sub(r' {2,}', ' ', text)
+
+    return text.strip()
+
+
+# ============================================================================
 # Funções auxiliares
 # ============================================================================
 
@@ -72,8 +120,8 @@ def get_clipboard_text():
             ["wl-paste"], capture_output=True, text=True, timeout=3
         )
         text = result.stdout.strip()
-        # Remove quebras de linha e espaços duplos (comum em PDFs)
-        text = " ".join(text.split())
+        # Formata o texto para leitura TTS
+        text = format_text_for_tts(text)
         return text
     except Exception:
         return ""
@@ -570,6 +618,8 @@ class TTSPlayerWindow(Gtk.Window):
         velocidade é feito pelo mpv em tempo real, permitindo ajustes
         durante a reprodução.
         """
+        # Formata o texto antes de enviar para o TTS
+        text = format_text_for_tts(text)
         try:
             # Limpa reprodução anterior
             self._stop_playback()
@@ -641,13 +691,20 @@ class TTSPlayerWindow(Gtk.Window):
             # Verifica se terminou naturalmente (não foi parado pelo usuário)
             if self.is_playing:
                 self.is_playing = False
-                self._set_status(
-                    '<span color="#cdd6f4">✅ Leitura finalizada</span>'
-                )
-                self.play_btn.set_label("▶  Play")
                 self._set_controls(
-                    play=True, pause=False, stop=False, selectors=True
+                    play=False, pause=False, stop=False, selectors=False
                 )
+                # Contagem regressiva de 5 segundos antes de fechar
+                for i in range(5, 0, -1):
+                    self._set_status(
+                        f'<span color="#cdd6f4">✅ Leitura finalizada — fechando em {i}s…</span>'
+                    )
+                    time.sleep(1)
+                    # Se o usuário interagiu (ex: clicou Play novamente), cancela
+                    if self.is_playing or self.is_generating:
+                        return
+                # Fecha a janela
+                GLib.idle_add(self.close)
 
         except subprocess.TimeoutExpired:
             self._set_status(
