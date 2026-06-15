@@ -42,6 +42,22 @@ bash install.sh
 
 O script `install.sh` copia os arquivos para `~/.local/bin/` e verifica as dependências.
 
+## 🗑️ Desinstalação
+
+Para remover completamente o edge-tts-okular do sistema:
+
+```bash
+bash uninstall.sh
+```
+
+O script remove:
+- Scripts instalados em `~/.local/bin/`
+- Configurações salvas em `~/.config/edge-tts-okular/`
+- Arquivos temporários em `/tmp/`
+- Processos em andamento
+
+> 💡 Após desinstalar, lembre-se de remover manualmente os atalhos de teclado configurados no GNOME.
+
 ## ⌨️ Configuração dos atalhos no GNOME
 
 Abra: **Configurações → Teclado → Atalhos de teclado → Atalhos personalizados**
@@ -79,6 +95,7 @@ edge-tts-okular/
 ├── ler_texto.sh       # Wrapper shell para atalho do GNOME
 ├── parar_leitura.sh   # Script para interromper a leitura
 ├── install.sh         # Instalador
+├── uninstall.sh       # Desinstalador
 └── README.md
 ```
 
