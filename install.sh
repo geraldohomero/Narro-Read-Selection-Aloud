@@ -17,6 +17,15 @@ command -v wl-paste    >/dev/null 2>&1 || MISSING+=("wl-clipboard")
 command -v mpv         >/dev/null 2>&1 || MISSING+=("mpv")
 command -v notify-send >/dev/null 2>&1 || MISSING+=("libnotify")
 python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk" 2>/dev/null || MISSING+=("python3-gobject gtk3")
+python3 -c "
+import gi
+try:
+    gi.require_version('AyatanaAppIndicator3', '0.1')
+    from gi.repository import AyatanaAppIndicator3
+except ValueError:
+    gi.require_version('AppIndicator3', '0.1')
+    from gi.repository import AppIndicator3
+" 2>/dev/null || MISSING+=("libappindicator-gtk3")
 
 if ! command -v edge-tts >/dev/null 2>&1 && \
    [ ! -x "${HOME}/.local/bin/edge-tts" ]; then

@@ -1,8 +1,8 @@
-# Narro-RSA
+# Narro - Read Selection Aloud
 
-Leitor de texto em voz alta com **edge-tts** para o Okular no GNOME/Wayland (Fedora).
+Leitor de texto em voz alta com **edge-tts** para o **GNOME/Wayland**.
 
-Selecione texto no Okular, copie com `Ctrl+C`, e use um atalho de teclado para abrir o player TTS — com controles de **Play/Pause/Stop**, seletor de **idioma/voz** e **velocidade**.
+Selecione texto em **qualquer aplicativo**, copie com `Ctrl+C`, e use um atalho de teclado para abrir o player TTS — com controles de **Play/Pause/Stop**, seletor de **idioma/voz** e **velocidade**.
 
 ![Player TTS](https://img.shields.io/badge/GTK3-Player-blue?style=for-the-badge)
 
@@ -10,15 +10,15 @@ Selecione texto no Okular, copie com `Ctrl+C`, e use um atalho de teclado para a
 
 ## ✨ Funcionalidades
 
-- ▶️ **Play / ⏸ Pause / ⏹ Stop** — Controles completos de reprodução
-- 🎙️ **20+ vozes neurais** — Português (BR/PT), English, Español, Français, Deutsch
-- ⚡ **Controle de velocidade** — De -50% até +100%
-- 🖥️ **Interface GTK nativa** — Integração visual com o GNOME (tema escuro)
-- ✏️ **Texto editável** — Edite o texto capturado antes de reproduzir
-- 🔔 **Barra de status** — Feedback visual em tempo real
-- 🔄 **Toggle** — Pressione o atalho novamente para fechar o player
+- **Play / Pause / Stop** — Controles completos de reprodução
+- **20+ vozes neurais** — Português (BR/PT), English, Español, Français, Deutsch
+- **Controle de velocidade** — De -50% até +100%
+- **Interface GTK nativa** — Integração visual com o GNOME (tema escuro)
+- **Texto editável** — Edite o texto capturado antes de reproduzir
+- **Barra de status** — Feedback visual em tempo real
+- **Toggle** — Pressione o atalho novamente para fechar o player
 
-## 📦 Dependências
+## Dependências
 
 | Pacote | Instalação |
 |---|---|
@@ -34,17 +34,17 @@ sudo dnf install wl-clipboard mpv python3-gobject gtk3 libnotify
 pipx install edge-tts
 ```
 
-## 🚀 Instalação
+## Instalação
 
 ```bash
-git clone https://github.com/SEU_USUARIO/narro-rsa.git
+git clone https://github.com/geraldohomero/narro-rsa.git
 cd narro-rsa
 bash install.sh
 ```
 
 O script `install.sh` copia os arquivos para `~/.local/bin/` e verifica as dependências.
 
-## 🗑️ Desinstalação
+## Desinstalação
 
 Para remover completamente o Narro-RSA do sistema:
 
@@ -58,9 +58,9 @@ O script remove:
 - Arquivos temporários em `/tmp/`
 - Processos em andamento
 
-> 💡 Após desinstalar, lembre-se de remover manualmente os atalhos de teclado configurados no GNOME.
+> Após desinstalar, lembre-se de remover manualmente os atalhos de teclado configurados no GNOME.
 
-## ⌨️ Configuração dos atalhos no GNOME
+## Configuração dos atalhos no GNOME
 
 Abra: **Configurações → Teclado → Atalhos de teclado → Atalhos personalizados**
 
@@ -78,7 +78,7 @@ Abra: **Configurações → Teclado → Atalhos de teclado → Atalhos personali
 | Comando | `bash -c "$HOME/.local/bin/parar_leitura.sh"` |
 | Atalho | `Super+Alt+K` (sugestão) |
 
-## 🎯 Como usar
+## Como usar
 
 1. Abra um PDF no **Okular**
 2. Selecione o texto desejado com a ferramenta de seleção
@@ -89,7 +89,7 @@ Abra: **Configurações → Teclado → Atalhos de teclado → Atalhos personali
 7. Clique **▶ Play** para iniciar a leitura
 8. Use **⏸ Pause** para pausar/retomar e **⏹ Stop** para parar
 
-## 📂 Estrutura
+## Estrutura
 
 ```
 narro-rsa/
@@ -101,7 +101,7 @@ narro-rsa/
 └── README.md
 ```
 
-## 🗣️ Vozes disponíveis
+## Vozes disponíveis
 
 | Código | Idioma | Gênero |
 |---|---|---|
@@ -125,8 +125,8 @@ narro-rsa/
 | de-DE-ConradNeural | Deutsch DE | Männlich |
 | de-DE-KatjaNeural | Deutsch DE | Weiblich |
 
-> 💡 Para adicionar mais vozes, edite o array `VOICES` em `ler_texto.py`. Liste todas as disponíveis com: `edge-tts --list-voices`
+> Para adicionar mais vozes, edite o array `VOICES` em `ler_texto.py`. Liste todas as disponíveis com: `edge-tts --list-voices`
 
-## 📄 Licença
+## Licença
 
 MIT
