@@ -7,6 +7,7 @@ set -euo pipefail
 
 INSTALL_DIR="${HOME}/.local/bin"
 CONFIG_DIR="${HOME}/.config/narro-rsa"
+PIPER_DIR="${CONFIG_DIR}/piper-voices"
 
 INSTALLED_FILES=(
     "$INSTALL_DIR/ler_texto.py"
@@ -16,11 +17,13 @@ INSTALLED_FILES=(
 
 TMP_FILES=(
     "/tmp/narro-rsa.mp3"
+    "/tmp/narro-rsa.wav"
     "/tmp/narro-rsa.lock"
     "/tmp/narro-rsa-mpv.sock"
 )
 
 echo "🗑️  Desinstalação do Narro-RSA"
+
 echo ""
 
 # Mostra o que será removido
@@ -39,6 +42,9 @@ echo ""
 echo "  ⚙️  Configurações:"
 if [ -d "$CONFIG_DIR" ]; then
     echo "     ✓ $CONFIG_DIR/"
+    if [ -d "$PIPER_DIR" ]; then
+        echo "     ✓ $PIPER_DIR/ (Vozes do Piper baixadas)"
+    fi
 else
     echo "     ✗ $CONFIG_DIR/ (não encontrado)"
 fi
@@ -66,6 +72,7 @@ echo ""
 echo "⏹  Parando processos em andamento…"
 pkill -f "mpv.*narro-rsa" 2>/dev/null || true
 pkill -f "edge-tts.*narro-rsa" 2>/dev/null || true
+pkill -f "piper.*narro-rsa" 2>/dev/null || true
 pkill -f "ler_texto.py" 2>/dev/null || true
 
 # 2. Remove scripts instalados

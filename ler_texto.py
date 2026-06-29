@@ -33,18 +33,23 @@ import sys
 import time
 import re
 
+import urllib.request
+
 # ============================================================================
 # Configurações
 # ============================================================================
 
-EDGE_TTS_BIN = os.path.expanduser("~/.local/bin/edge-tts")
-TMP_AUDIO    = "/tmp/narro-rsa.mp3"
-MPV_SOCKET   = "/tmp/narro-rsa-mpv.sock"
-LOCKFILE     = "/tmp/narro-rsa.lock"
-CONFIG_DIR   = os.path.expanduser("~/.config/narro-rsa")
-CONFIG_FILE  = os.path.join(CONFIG_DIR, "settings.json")
+EDGE_TTS_BIN     = os.path.expanduser("~/.local/bin/edge-tts")
+PIPER_BIN        = os.path.expanduser("~/.local/bin/piper")
+LOCKFILE         = "/tmp/narro-rsa.lock"
+MPV_SOCKET       = "/tmp/narro-rsa-mpv.sock"
+CONFIG_DIR       = os.path.expanduser("~/.config/narro-rsa")
+CONFIG_FILE      = os.path.join(CONFIG_DIR, "settings.json")
+PIPER_VOICES_DIR = os.path.join(CONFIG_DIR, "piper-voices")
+TMP_AUDIO_MP3    = "/tmp/narro-rsa.mp3"
+TMP_AUDIO_WAV    = "/tmp/narro-rsa.wav"
 
-APPINDICATOR_ID = "narro-rsa"
+APPINDICATOR_ID  = "narro-rsa"
 
 VOICES = [
     # (código, idioma, gênero, descrição)
@@ -167,7 +172,7 @@ def kill_mpv():
 def cleanup():
     """Remove arquivos temporários."""
     kill_mpv()
-    for f in [TMP_AUDIO, LOCKFILE, MPV_SOCKET]:
+    for f in [TMP_AUDIO_MP3, TMP_AUDIO_WAV, LOCKFILE, MPV_SOCKET]:
         try:
             os.unlink(f)
         except OSError:
@@ -183,19 +188,350 @@ def load_settings():
         return {}
 
 
-def save_settings(voice=None, speed=None):
+def save_settings(voice=None, speed=None, engine=None):
     """Salva as preferências atuais."""
     settings = load_settings()
     if voice is not None:
         settings["voice"] = voice
     if speed is not None:
         settings["speed"] = speed
+    if engine is not None:
+        settings["engine"] = engine
     try:
         os.makedirs(CONFIG_DIR, exist_ok=True)
         with open(CONFIG_FILE, "w") as f:
             json.dump(settings, f)
     except OSError:
         pass
+
+
+
+# ============================================================================
+# Diálogo de Seleção de Voz (GTK3 Nativo)
+# ============================================================================
+
+class VoiceSelectionDialog(Gtk.Dialog):
+    def __init__(self, parent_window, engine, language_name, current_voice):
+        super().__init__(
+            title=f"Selecionar Voz — {engine.upper()}",
+            transient_for=parent_window,
+            flags=0
+        )
+        self.set_default_size(500, 400)
+        self.engine = engine
+        self.language_name = language_name
+        self.selected_voice_code = current_voice
+        self.download_thread = None
+        self.is_downloading = False
+
+        # Adiciona botões na área de ação
+        self.ok_button = self.add_button("Selecionar", Gtk.ResponseType.OK)
+        self.cancel_button = self.add_button("Cancelar", Gtk.ResponseType.CANCEL)
+        
+        # Constrói o conteúdo
+        vbox = self.get_content_area()
+        vbox.set_spacing(10)
+        vbox.set_border_width(15)
+
+        # Label de Título
+        title_label = Gtk.Label()
+        title_label.set_markup(f"<b>Selecione uma voz para {language_name} ({engine}):</b>")
+        title_label.set_xalign(0.0)
+        vbox.pack_start(title_label, False, False, 0)
+
+        # ScrolledWindow para o TreeView
+        scrolled_window = Gtk.ScrolledWindow()
+        scrolled_window.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scrolled_window.set_shadow_type(Gtk.ShadowType.IN)
+        vbox.pack_start(scrolled_window, True, True, 0)
+
+        # Barra de Progresso (oculta por padrão)
+        self.progress_bar = Gtk.ProgressBar()
+        self.progress_bar.set_no_show_all(True)
+        self.progress_bar.hide()
+        vbox.pack_start(self.progress_bar, False, False, 0)
+
+        # Label de informações adicionais/erros
+        self.info_label = Gtk.Label()
+        self.info_label.set_xalign(0.0)
+        vbox.pack_start(self.info_label, False, False, 0)
+
+        # Botão de download para o Piper
+        self.download_btn = Gtk.Button(label="Baixar voz selecionada")
+        self.download_btn.connect("clicked", self._on_download_clicked)
+        self.download_btn.set_no_show_all(True)
+        self.download_btn.hide()
+        vbox.pack_start(self.download_btn, False, False, 0)
+
+        if self.engine == "piper":
+            loc_label = Gtk.Label()
+            loc_label.set_markup(f"<small><i>Local das vozes: {PIPER_VOICES_DIR}</i></small>")
+            loc_label.set_xalign(0.0)
+            vbox.pack_start(loc_label, False, False, 0)
+
+        # Configura o TreeView
+        self.treeview = Gtk.TreeView()
+        scrolled_window.add(self.treeview)
+
+        # Coluna do botão de rádio
+        self.renderer_radio = Gtk.CellRendererToggle()
+        self.renderer_radio.set_radio(True)
+        self.renderer_radio.connect("toggled", self._on_radio_toggled)
+
+        column_radio = Gtk.TreeViewColumn("Sel.", self.renderer_radio)
+        column_radio.add_attribute(self.renderer_radio, "active", 0)
+        self.treeview.append_column(column_radio)
+
+        # Configura as colunas de acordo com o engine
+        if self.engine == "edge-tts":
+            # ListStore: [selecionado, código, gênero, descrição]
+            self.liststore = Gtk.ListStore(bool, str, str, str)
+            self.treeview.set_model(self.liststore)
+
+            renderer_text = Gtk.CellRendererText()
+            self.treeview.append_column(Gtk.TreeViewColumn("Código/Voz", renderer_text, text=1))
+            self.treeview.append_column(Gtk.TreeViewColumn("Gênero", renderer_text, text=2))
+            self.treeview.append_column(Gtk.TreeViewColumn("Descrição", renderer_text, text=3))
+
+            self._populate_edge_voices()
+        else:  # piper
+            # ListStore: [selecionado, código, nome, qualidade, status_str, is_downloaded, size_str, onnx_url, json_url]
+            self.liststore = Gtk.ListStore(bool, str, str, str, str, bool, str, str, str)
+            self.treeview.set_model(self.liststore)
+
+            renderer_text = Gtk.CellRendererText()
+            self.treeview.append_column(Gtk.TreeViewColumn("Modelo", renderer_text, text=2))
+            self.treeview.append_column(Gtk.TreeViewColumn("Qualidade", renderer_text, text=3))
+            self.treeview.append_column(Gtk.TreeViewColumn("Status", renderer_text, text=4))
+            self.treeview.append_column(Gtk.TreeViewColumn("Tamanho", renderer_text, text=6))
+
+            self.download_btn.show()
+            self._populate_piper_voices()
+
+        self.show_all()
+        self._update_buttons_state()
+
+    def _populate_edge_voices(self):
+        self.liststore.clear()
+        found_match = False
+        rows = []
+        for code, lang, gender, desc in VOICES:
+            if lang == self.language_name:
+                is_selected = (code == self.selected_voice_code)
+                if is_selected:
+                    found_match = True
+                rows.append([is_selected, code, gender, desc])
+        if not found_match and len(rows) > 0:
+            rows[0][0] = True
+            self.selected_voice_code = rows[0][1]
+        for r in rows:
+            self.liststore.append(r)
+
+    def _populate_piper_voices(self):
+        self.liststore.clear()
+        voices_json_path = os.path.join(PIPER_VOICES_DIR, "voices.json")
+        if not os.path.exists(voices_json_path):
+            self.info_label.set_markup("<span color='orange'>Baixando catálogo de vozes...</span>")
+            threading.Thread(target=self._download_catalog_thread, daemon=True).start()
+            return
+
+        try:
+            with open(voices_json_path, "r") as f:
+                data = json.load(f)
+        except Exception as e:
+            self.info_label.set_text(f"Erro ao carregar catálogo: {e}")
+            return
+
+        piper_lang_map = {
+            "Português BR": "pt_BR",
+            "Português PT": "pt_PT",
+            "English US": "en_US",
+            "English GB": "en_GB",
+            "Español ES": "es_ES",
+            "Français FR": "fr_FR",
+            "Deutsch DE": "de_DE"
+        }
+        target_lang = piper_lang_map.get(self.language_name, "pt_BR")
+
+        rows = []
+        found_match = False
+        for voice_code, info in data.items():
+            lang_code = info.get("language", {}).get("code")
+            if lang_code == target_lang:
+                onnx_rel = None
+                json_rel = None
+                size_bytes = 0
+                for filepath, fileinfo in info.get("files", {}).items():
+                    if filepath.endswith(".onnx"):
+                        onnx_rel = filepath
+                        size_bytes = fileinfo.get("size_bytes", 0)
+                    elif filepath.endswith(".onnx.json"):
+                        json_rel = filepath
+
+                if not onnx_rel:
+                    continue
+
+                dest_onnx = os.path.join(PIPER_VOICES_DIR, f"{voice_code}.onnx")
+                is_downloaded = os.path.exists(dest_onnx)
+                status_str = "Baixado" if is_downloaded else "Não baixado"
+                size_str = f"{size_bytes / (1024*1024):.1f} MB"
+                
+                onnx_url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{onnx_rel}"
+                json_url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{json_rel}"
+
+                is_selected = (voice_code == self.selected_voice_code)
+                if is_selected:
+                    found_match = True
+
+                rows.append([
+                    is_selected,
+                    voice_code,
+                    info.get("name"),
+                    info.get("quality"),
+                    status_str,
+                    is_downloaded,
+                    size_str,
+                    onnx_url,
+                    json_url
+                ])
+
+        if not found_match and len(rows) > 0:
+            rows[0][0] = True
+            self.selected_voice_code = rows[0][1]
+
+        for r in rows:
+            self.liststore.append(r)
+        self.info_label.set_text("")
+
+    def _download_catalog_thread(self):
+        try:
+            os.makedirs(PIPER_VOICES_DIR, exist_ok=True)
+            url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/voices.json"
+            voices_json_path = os.path.join(PIPER_VOICES_DIR, "voices.json")
+            urllib.request.urlretrieve(url, voices_json_path)
+            GLib.idle_add(self._populate_piper_voices)
+        except Exception as e:
+            GLib.idle_add(self.info_label.set_text, f"Erro ao baixar catálogo: {e}")
+
+    def _on_radio_toggled(self, renderer, path):
+        for row in self.liststore:
+            row[0] = False
+        self.liststore[path][0] = True
+        self.selected_voice_code = self.liststore[path][1]
+        self._update_buttons_state()
+
+    def _update_buttons_state(self):
+        if self.engine == "edge-tts":
+            self.ok_button.set_sensitive(True)
+            self.download_btn.hide()
+        else:
+            selected_row = None
+            for row in self.liststore:
+                if row[0]:
+                    selected_row = row
+                    break
+            if selected_row:
+                is_downloaded = selected_row[5]
+                self.ok_button.set_sensitive(is_downloaded)
+                self.download_btn.set_sensitive(not is_downloaded)
+                if is_downloaded:
+                    self.info_label.set_markup("<span color='green'>Voz pronta para uso!</span>")
+                else:
+                    self.info_label.set_markup("<span color='orange'>Voz não baixada. Clique em 'Baixar voz selecionada'.</span>")
+            else:
+                self.ok_button.set_sensitive(False)
+                self.download_btn.set_sensitive(False)
+
+    def _on_download_clicked(self, btn):
+        if self.is_downloading:
+            return
+        selected_row = None
+        for row in self.liststore:
+            if row[0]:
+                selected_row = row
+                break
+        if not selected_row:
+            return
+
+        voice_code = selected_row[1]
+        onnx_url = selected_row[7]
+        json_url = selected_row[8]
+
+        self.is_downloading = True
+        self.download_btn.set_sensitive(False)
+        self.ok_button.set_sensitive(False)
+        self.cancel_button.set_sensitive(False)
+        self.treeview.set_sensitive(False)
+        self.progress_bar.show()
+        self.progress_bar.set_fraction(0.0)
+        self.progress_bar.set_text("Iniciando download...")
+
+        self.download_thread = threading.Thread(
+            target=self._download_voice_thread,
+            args=(voice_code, onnx_url, json_url),
+            daemon=True
+        )
+        self.download_thread.start()
+
+    def _download_voice_thread(self, voice_code, onnx_url, json_url):
+        dest_onnx = os.path.join(PIPER_VOICES_DIR, f"{voice_code}.onnx")
+        dest_json = os.path.join(PIPER_VOICES_DIR, f"{voice_code}.onnx.json")
+
+        try:
+            os.makedirs(PIPER_VOICES_DIR, exist_ok=True)
+            GLib.idle_add(self.progress_bar.set_text, "Baixando configurações...")
+            urllib.request.urlretrieve(json_url, dest_json)
+            GLib.idle_add(self.progress_bar.set_fraction, 0.05)
+
+            GLib.idle_add(self.progress_bar.set_text, f"Baixando modelo {voice_code}...")
+            
+            def report_hook(block_num, block_size, total_size):
+                if total_size > 0:
+                    downloaded = block_num * block_size
+                    percent = 0.05 + (downloaded / total_size) * 0.90
+                    percent = min(0.99, percent)
+                    GLib.idle_add(self.progress_bar.set_fraction, percent)
+                    GLib.idle_add(self.progress_bar.set_text, f"Baixando: {int(percent*100)}% ({downloaded / (1024*1024):.1f} MB)")
+
+            urllib.request.urlretrieve(onnx_url, dest_onnx, reporthook=report_hook)
+
+            GLib.idle_add(self.progress_bar.set_fraction, 1.0)
+            GLib.idle_add(self.progress_bar.set_text, "Download finalizado!")
+
+            def on_success():
+                self.is_downloading = False
+                self.progress_bar.hide()
+                self.cancel_button.set_sensitive(True)
+                self.treeview.set_sensitive(True)
+                self._populate_piper_voices()
+                self._update_buttons_state()
+            GLib.idle_add(on_success)
+
+        except Exception as e:
+            for f in (dest_onnx, dest_json):
+                if os.path.exists(f):
+                    try:
+                        os.unlink(f)
+                    except OSError:
+                        pass
+            def on_error(err_msg):
+                self.is_downloading = False
+                self.progress_bar.hide()
+                self.cancel_button.set_sensitive(True)
+                self.treeview.set_sensitive(True)
+                self._update_buttons_state()
+
+                err_dialog = Gtk.MessageDialog(
+                    transient_for=self,
+                    flags=Gtk.DialogFlags.MODAL,
+                    message_type=Gtk.MessageType.ERROR,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Erro ao baixar voz",
+                )
+                err_dialog.format_secondary_text(err_msg)
+                err_dialog.run()
+                err_dialog.destroy()
+            GLib.idle_add(on_error, str(e))
 
 
 # ============================================================================
@@ -228,10 +564,19 @@ class TTSIndicator:
 
         # Carrega preferências
         saved = load_settings()
-        voice_codes = [v[0] for v in VOICES]
-        self.current_voice = saved.get("voice", VOICES[0][0])
-        if self.current_voice not in voice_codes:
-            self.current_voice = VOICES[0][0]
+        self.current_engine = saved.get("engine", "edge-tts")
+        if self.current_engine not in ("edge-tts", "piper"):
+            self.current_engine = "edge-tts"
+
+        self.current_voice = saved.get("voice", None)
+        if self.current_engine == "edge-tts":
+            voice_codes = [v[0] for v in VOICES]
+            if not self.current_voice or self.current_voice not in voice_codes:
+                self.current_voice = VOICES[0][0]
+        else:
+            if not self.current_voice:
+                self.current_voice = "pt_BR-cadu-medium"
+
         self.current_speed = float(saved.get("speed", SPEED_DEFAULT))
         self.current_speed = max(SPEED_OPTIONS[0],
                                  min(SPEED_OPTIONS[-1], self.current_speed))
@@ -283,27 +628,49 @@ class TTSIndicator:
         # ── Submenu Voz ──────────────────────────────────────────────
         voice_item = Gtk.MenuItem(label="Voz")
         voice_submenu = Gtk.Menu()
-        voice_groups: dict = {}
-        for code, lang, gender, desc in VOICES:
-            voice_groups.setdefault(lang, []).append((code, gender, desc))
-        self.voice_radio_items: dict = {}
-        group_radio = None
-        for lang_name, voices_in_lang in voice_groups.items():
-            lhdr = Gtk.MenuItem(label=lang_name)
-            lhdr.set_sensitive(False)
-            voice_submenu.append(lhdr)
-            voice_submenu.append(Gtk.SeparatorMenuItem())
-            for code, gender, desc in voices_in_lang:
-                radio = Gtk.RadioMenuItem.new_with_label_from_widget(
-                    group_radio, f"{gender} — {desc}"
-                )
-                if group_radio is None:
-                    group_radio = radio
-                if code == self.current_voice:
-                    radio.set_active(True)
-                radio.connect("toggled", self._on_voice_toggled, code)
-                voice_submenu.append(radio)
-                self.voice_radio_items[code] = radio
+
+        # Engine: Edge-TTS
+        edge_menu_item = Gtk.MenuItem(label="Edge TTS")
+        edge_submenu = Gtk.Menu()
+
+        edge_langs = sorted(list(set(v[1] for v in VOICES)))
+        for lang in edge_langs:
+            lang_item = Gtk.MenuItem(label=lang)
+            lang_submenu = Gtk.Menu()
+            select_item = Gtk.MenuItem(label="Selecionar")
+            select_item.connect("activate", self._on_select_voice_dialog, "edge-tts", lang)
+            lang_submenu.append(select_item)
+            lang_item.set_submenu(lang_submenu)
+            edge_submenu.append(lang_item)
+
+        edge_menu_item.set_submenu(edge_submenu)
+        voice_submenu.append(edge_menu_item)
+
+        # Engine: Piper TTS
+        piper_menu_item = Gtk.MenuItem(label="Piper TTS")
+        piper_submenu = Gtk.Menu()
+
+        piper_lang_map = {
+            "Português BR": "pt_BR",
+            "Português PT": "pt_PT",
+            "English US": "en_US",
+            "English GB": "en_GB",
+            "Español ES": "es_ES",
+            "Français FR": "fr_FR",
+            "Deutsch DE": "de_DE"
+        }
+        for lang_name in piper_lang_map.keys():
+            lang_item = Gtk.MenuItem(label=lang_name)
+            lang_submenu = Gtk.Menu()
+            select_item = Gtk.MenuItem(label="Selecionar")
+            select_item.connect("activate", self._on_select_voice_dialog, "piper", lang_name)
+            lang_submenu.append(select_item)
+            lang_item.set_submenu(lang_submenu)
+            piper_submenu.append(lang_item)
+
+        piper_menu_item.set_submenu(piper_submenu)
+        voice_submenu.append(piper_menu_item)
+
         voice_item.set_submenu(voice_submenu)
         self.main_menu.append(voice_item)
 
@@ -412,10 +779,23 @@ class TTSIndicator:
         elif not self.is_playing and not self.is_generating:
             self._start_new_reading()
 
-    def _on_voice_toggled(self, radio, voice_code):
-        if radio.get_active():
-            self.current_voice = voice_code
-            save_settings(voice=voice_code)
+    def _on_select_voice_dialog(self, menu_item, engine, language_name):
+        def on_selected(selected_voice):
+            self.current_engine = engine
+            self.current_voice = selected_voice
+            save_settings(voice=selected_voice, engine=engine)
+            self.status_item.set_label(f"Voz: {selected_voice} ({engine})")
+
+        dialog = VoiceSelectionDialog(
+            parent_window=None,
+            engine=engine,
+            language_name=language_name,
+            current_voice=self.current_voice
+        )
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            on_selected(dialog.selected_voice_code)
+        dialog.destroy()
 
     def _on_speed_toggled(self, radio, speed_val):
         if radio.get_active():
@@ -426,7 +806,7 @@ class TTSIndicator:
                 send_mpv_command(["set_property", "speed", speed_val])
 
     def _on_quit(self, _item):
-        save_settings(voice=self.current_voice, speed=self.current_speed)
+        save_settings(voice=self.current_voice, speed=self.current_speed, engine=self.current_engine)
         self._stop_playback()
         cleanup()
         Gtk.main_quit()
@@ -481,44 +861,74 @@ class TTSIndicator:
                     pass
         self.mpv_process = None
         kill_mpv()
-        try:
-            os.unlink(TMP_AUDIO)
-        except OSError:
-            pass
+        for f in (TMP_AUDIO_MP3, TMP_AUDIO_WAV):
+            try:
+                os.unlink(f)
+            except OSError:
+                pass
 
     def _generate_and_play(self, text, voice, initial_speed):
-        """Gera o áudio com edge-tts e reproduz com mpv (roda em thread).
-
-        O áudio é gerado em velocidade normal (+0%). O mpv controla a
-        velocidade em tempo real, permitindo ajustes durante a reprodução.
-        """
+        """Gera o áudio com edge-tts ou piper e reproduz com mpv (roda em thread)."""
         text = format_text_for_tts(text)
         try:
             self._stop_playback()
             self.is_generating = True
             self._update_indicator_state()
 
-            try:
-                os.unlink(TMP_AUDIO)
-            except OSError:
-                pass
+            # Determina o arquivo temporário e o comando de acordo com o engine
+            if self.current_engine == "piper":
+                tmp_audio = TMP_AUDIO_WAV
+                model_path = os.path.join(PIPER_VOICES_DIR, f"{voice}.onnx")
+                
+                if not os.path.exists(model_path):
+                    GLib.idle_add(self.status_item.set_label, "Erro: Voz Piper não baixada")
+                    self.is_generating = False
+                    self._update_indicator_state()
+                    return
 
-            result = subprocess.run(
-                [
-                    EDGE_TTS_BIN,
-                    "--text", text,
-                    "--voice", voice,
-                    "--rate", "+0%",
-                    "--write-media", TMP_AUDIO,
-                ],
-                capture_output=True, text=True, timeout=120,
-            )
+                try:
+                    os.unlink(tmp_audio)
+                except OSError:
+                    pass
+
+                # Tenta usar o binário local em ~/.local/bin/piper, se não existir busca no PATH
+                piper_bin = PIPER_BIN if os.path.exists(PIPER_BIN) else "piper"
+
+                result = subprocess.run(
+                    [
+                        piper_bin,
+                        "--model", model_path,
+                        "--output_file", tmp_audio,
+                    ],
+                    input=text.encode("utf-8"),
+                    capture_output=True,
+                    timeout=120,
+                )
+                engine_name = "piper"
+            else:
+                tmp_audio = TMP_AUDIO_MP3
+                try:
+                    os.unlink(tmp_audio)
+                except OSError:
+                    pass
+
+                result = subprocess.run(
+                    [
+                        EDGE_TTS_BIN,
+                        "--text", text,
+                        "--voice", voice,
+                        "--rate", "+0%",
+                        "--write-media", tmp_audio,
+                    ],
+                    capture_output=True, text=True, timeout=120,
+                )
+                engine_name = "edge-tts"
 
             if not self.is_generating:
                 return
 
-            if result.returncode != 0 or not os.path.exists(TMP_AUDIO):
-                GLib.idle_add(self.status_item.set_label, "Erro ao gerar áudio")
+            if result.returncode != 0 or not os.path.exists(tmp_audio):
+                GLib.idle_add(self.status_item.set_label, f"Erro ao gerar áudio ({engine_name})")
                 self.is_generating = False
                 self._update_indicator_state()
                 return
@@ -539,7 +949,7 @@ class TTSIndicator:
                     "--really-quiet",
                     f"--input-ipc-server={MPV_SOCKET}",
                     f"--speed={initial_speed}",
-                    TMP_AUDIO,
+                    tmp_audio,
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
@@ -552,7 +962,7 @@ class TTSIndicator:
                 self._update_indicator_state()
 
         except subprocess.TimeoutExpired:
-            GLib.idle_add(self.status_item.set_label, "Timeout — edge-tts demorou")
+            GLib.idle_add(self.status_item.set_label, f"Timeout — {engine_name} demorou")
             self.is_generating = False
             self._update_indicator_state()
         except Exception as e:
