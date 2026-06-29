@@ -8,6 +8,8 @@ Selecione texto em qualquer aplicativo, copie com Ctrl+C, e use um atalho de tec
 
 ![alt text](image.png)
 
+![alt text](image-1.png)
+
 ## Funcionalidades
 
 - Controles completos de reprodução (Play, Pause, Stop).
