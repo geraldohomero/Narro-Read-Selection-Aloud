@@ -6,9 +6,9 @@ Selecione texto em qualquer aplicativo, copie com Ctrl+C, e use um atalho de tec
 
 ![Player TTS](https://img.shields.io/badge/GTK3-Player-blue?style=for-the-badge)
 
-![Imagem da aplicação aberta no sistema](assets/image.png)
+![alt text](assets/image.png)
 
-![Seleção de vozes com Piper TTS](assets/image-1.png)
+![alt text](assets/image-1.png)
 
 ## Funcionalidades
 

@@ -68,6 +68,10 @@ VOICES = [
     ("en-GB-SoniaNeural",                 "English GB",    "Female",    "Geral"),
     ("es-ES-AlvaroNeural",                "Español ES",    "Masculino", "Geral"),
     ("es-ES-ElviraNeural",                "Español ES",    "Femenino",  "Geral"),
+    ("es-AR-TomasNeural",                 "Español AR",    "Masculino", "Geral"),
+    ("es-AR-ElenaNeural",                 "Español AR",    "Femenino",  "Geral"),
+    ("es-MX-JorgeNeural",                 "Español MX",    "Masculino", "Geral"),
+    ("es-MX-DaliaNeural",                 "Español MX",    "Femenino",  "Geral"),
     ("fr-FR-HenriNeural",                 "Français FR",   "Masculin",  "Geral"),
     ("fr-FR-DeniseNeural",                "Français FR",   "Féminin",   "Geral"),
     ("de-DE-ConradNeural",                "Deutsch DE",    "Männlich",  "Geral"),
@@ -75,9 +79,9 @@ VOICES = [
 ]
 
 # Velocidades predefinidas para o submenu
-SPEED_OPTIONS = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0]
+SPEED_OPTIONS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 3.0, 4.0]
 SPEED_DEFAULT = 1.0
-
+ 
 # ============================================================================
 # Formatação de texto
 # ============================================================================
@@ -203,7 +207,24 @@ def save_settings(voice=None, speed=None, engine=None):
             json.dump(settings, f)
     except OSError:
         pass
-
+def get_downloaded_piper_voices():
+    """Retorna um dicionário mapeando código de idioma (ex: 'pt_BR') a uma lista
+    de tuplas (código_voz, nome_exibição) para as vozes do Piper já baixadas."""
+    downloaded = {}
+    if not os.path.exists(PIPER_VOICES_DIR):
+        return downloaded
+    for filename in os.listdir(PIPER_VOICES_DIR):
+        if filename.endswith(".onnx"):
+            voice_code = filename[:-5]  # remove '.onnx'
+            # Tenta inferir idioma e detalhes do nome
+            parts = voice_code.split("-")
+            if len(parts) >= 1:
+                lang_code = parts[0]
+                name = parts[1] if len(parts) > 1 else voice_code
+                quality = parts[2] if len(parts) > 2 else ""
+                display_name = f"{name} ({quality})" if quality else name
+                downloaded.setdefault(lang_code, []).append((voice_code, display_name))
+    return downloaded
 
 
 # ============================================================================
@@ -256,12 +277,18 @@ class VoiceSelectionDialog(Gtk.Dialog):
         self.info_label.set_xalign(0.0)
         vbox.pack_start(self.info_label, False, False, 0)
 
-        # Botão de download para o Piper
+        # Caixa de botões do Piper (Download e Exclusão)
+        self.piper_btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+
         self.download_btn = Gtk.Button(label="Baixar voz selecionada")
         self.download_btn.connect("clicked", self._on_download_clicked)
-        self.download_btn.set_no_show_all(True)
-        self.download_btn.hide()
-        vbox.pack_start(self.download_btn, False, False, 0)
+        self.piper_btn_box.pack_start(self.download_btn, True, True, 0)
+
+        self.remove_btn = Gtk.Button(label="Remover voz selecionada")
+        self.remove_btn.connect("clicked", self._on_remove_clicked)
+        self.piper_btn_box.pack_start(self.remove_btn, True, True, 0)
+
+        vbox.pack_start(self.piper_btn_box, False, False, 0)
 
         if self.engine == "piper":
             loc_label = Gtk.Label()
@@ -305,7 +332,7 @@ class VoiceSelectionDialog(Gtk.Dialog):
             self.treeview.append_column(Gtk.TreeViewColumn("Status", renderer_text, text=4))
             self.treeview.append_column(Gtk.TreeViewColumn("Tamanho", renderer_text, text=6))
 
-            self.download_btn.show()
+            self.piper_btn_box.show_all()
             self._populate_piper_voices()
 
         self.show_all()
@@ -348,6 +375,8 @@ class VoiceSelectionDialog(Gtk.Dialog):
             "English US": "en_US",
             "English GB": "en_GB",
             "Español ES": "es_ES",
+            "Español AR": "es_AR",
+            "Español MX": "es_MX",
             "Français FR": "fr_FR",
             "Deutsch DE": "de_DE"
         }
@@ -423,8 +452,9 @@ class VoiceSelectionDialog(Gtk.Dialog):
     def _update_buttons_state(self):
         if self.engine == "edge-tts":
             self.ok_button.set_sensitive(True)
-            self.download_btn.hide()
+            self.piper_btn_box.hide()
         else:
+            self.piper_btn_box.show_all()
             selected_row = None
             for row in self.liststore:
                 if row[0]:
@@ -434,6 +464,7 @@ class VoiceSelectionDialog(Gtk.Dialog):
                 is_downloaded = selected_row[5]
                 self.ok_button.set_sensitive(is_downloaded)
                 self.download_btn.set_sensitive(not is_downloaded)
+                self.remove_btn.set_sensitive(is_downloaded)
                 if is_downloaded:
                     self.info_label.set_markup("<span color='green'>Voz pronta para uso!</span>")
                 else:
@@ -441,6 +472,7 @@ class VoiceSelectionDialog(Gtk.Dialog):
             else:
                 self.ok_button.set_sensitive(False)
                 self.download_btn.set_sensitive(False)
+                self.remove_btn.set_sensitive(False)
 
     def _on_download_clicked(self, btn):
         if self.is_downloading:
@@ -472,6 +504,51 @@ class VoiceSelectionDialog(Gtk.Dialog):
             daemon=True
         )
         self.download_thread.start()
+
+    def _on_remove_clicked(self, btn):
+        selected_row = None
+        for row in self.liststore:
+            if row[0]:
+                selected_row = row
+                break
+        if not selected_row:
+            return
+
+        voice_code = selected_row[1]
+        dest_onnx = os.path.join(PIPER_VOICES_DIR, f"{voice_code}.onnx")
+        dest_json = os.path.join(PIPER_VOICES_DIR, f"{voice_code}.onnx.json")
+
+        confirm = Gtk.MessageDialog(
+            transient_for=self,
+            flags=Gtk.DialogFlags.MODAL,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text="Confirmar exclusão",
+        )
+        confirm.format_secondary_text(f"Deseja realmente remover os arquivos da voz {voice_code}?")
+        response = confirm.run()
+        confirm.destroy()
+
+        if response == Gtk.ResponseType.YES:
+            for f in (dest_onnx, dest_json):
+                if os.path.exists(f):
+                    try:
+                        os.unlink(f)
+                    except OSError as e:
+                        err_dialog = Gtk.MessageDialog(
+                            transient_for=self,
+                            flags=Gtk.DialogFlags.MODAL,
+                            message_type=Gtk.MessageType.ERROR,
+                            buttons=Gtk.ButtonsType.OK,
+                            text="Erro ao remover arquivos",
+                        )
+                        err_dialog.format_secondary_text(str(e))
+                        err_dialog.run()
+                        err_dialog.destroy()
+                        return
+
+            self._populate_piper_voices()
+            self._update_buttons_state()
 
     def _download_voice_thread(self, voice_code, onnx_url, json_url):
         dest_onnx = os.path.join(PIPER_VOICES_DIR, f"{voice_code}.onnx")
@@ -598,6 +675,7 @@ class TTSIndicator:
 
     def _build_main_menu(self):
         """Monta o menu dropdown do indicador principal."""
+        self.is_building_menu = True
         self.main_menu = Gtk.Menu()
 
         # Cabeçalho (não-clicável)
@@ -634,12 +712,24 @@ class TTSIndicator:
         edge_submenu = Gtk.Menu()
 
         edge_langs = sorted(list(set(v[1] for v in VOICES)))
+        edge_group_radio = None
         for lang in edge_langs:
             lang_item = Gtk.MenuItem(label=lang)
             lang_submenu = Gtk.Menu()
-            select_item = Gtk.MenuItem(label="Selecionar")
-            select_item.connect("activate", self._on_select_voice_dialog, "edge-tts", lang)
-            lang_submenu.append(select_item)
+            
+            # Vozes do Edge TTS listadas diretamente com rádio
+            lang_voices = [v for v in VOICES if v[1] == lang]
+            for code, _, gender, desc in lang_voices:
+                radio = Gtk.RadioMenuItem.new_with_label_from_widget(
+                    edge_group_radio, f"{gender} — {desc}"
+                )
+                if edge_group_radio is None:
+                    edge_group_radio = radio
+                if self.current_engine == "edge-tts" and code == self.current_voice:
+                    radio.set_active(True)
+                radio.connect("toggled", self._on_voice_selected_from_menu, "edge-tts", code)
+                lang_submenu.append(radio)
+                
             lang_item.set_submenu(lang_submenu)
             edge_submenu.append(lang_item)
 
@@ -650,21 +740,47 @@ class TTSIndicator:
         piper_menu_item = Gtk.MenuItem(label="Piper TTS")
         piper_submenu = Gtk.Menu()
 
+        downloaded_piper = get_downloaded_piper_voices()
+
         piper_lang_map = {
             "Português BR": "pt_BR",
             "Português PT": "pt_PT",
             "English US": "en_US",
             "English GB": "en_GB",
             "Español ES": "es_ES",
+            "Español AR": "es_AR",
+            "Español MX": "es_MX",
             "Français FR": "fr_FR",
             "Deutsch DE": "de_DE"
         }
-        for lang_name in piper_lang_map.keys():
+        piper_group_radio = None
+        for lang_name, lang_code in piper_lang_map.items():
             lang_item = Gtk.MenuItem(label=lang_name)
             lang_submenu = Gtk.Menu()
-            select_item = Gtk.MenuItem(label="Selecionar")
-            select_item.connect("activate", self._on_select_voice_dialog, "piper", lang_name)
-            lang_submenu.append(select_item)
+            
+            lang_downloaded = downloaded_piper.get(lang_code, [])
+            if lang_downloaded:
+                for voice_code, display_name in lang_downloaded:
+                    radio = Gtk.RadioMenuItem.new_with_label_from_widget(
+                        piper_group_radio, display_name
+                    )
+                    if piper_group_radio is None:
+                        piper_group_radio = radio
+                    if self.current_engine == "piper" and voice_code == self.current_voice:
+                        radio.set_active(True)
+                    radio.connect("toggled", self._on_voice_selected_from_menu, "piper", voice_code)
+                    lang_submenu.append(radio)
+                
+                lang_submenu.append(Gtk.SeparatorMenuItem())
+                
+                outras_item = Gtk.MenuItem(label="Outras vozes...")
+                outras_item.connect("activate", self._on_select_voice_dialog, "piper", lang_name)
+                lang_submenu.append(outras_item)
+            else:
+                baixar_item = Gtk.MenuItem(label="Baixar vozes...")
+                baixar_item.connect("activate", self._on_select_voice_dialog, "piper", lang_name)
+                lang_submenu.append(baixar_item)
+                
             lang_item.set_submenu(lang_submenu)
             piper_submenu.append(lang_item)
 
@@ -709,6 +825,9 @@ class TTSIndicator:
         self.main_menu.append(quit_item)
 
         self.main_menu.show_all()
+        if hasattr(self, 'ind_main') and self.ind_main:
+            self.ind_main.set_menu(self.main_menu)
+        self.is_building_menu = False
 
     # ------------------------------------------------------------------
     # Atualização de estado — ícone e itens do menu
@@ -785,6 +904,7 @@ class TTSIndicator:
             self.current_voice = selected_voice
             save_settings(voice=selected_voice, engine=engine)
             self.status_item.set_label(f"Voz: {selected_voice} ({engine})")
+            self._build_main_menu()
 
         dialog = VoiceSelectionDialog(
             parent_window=None,
@@ -795,7 +915,16 @@ class TTSIndicator:
         response = dialog.run()
         if response == Gtk.ResponseType.OK:
             on_selected(dialog.selected_voice_code)
+        else:
+            self._build_main_menu()
         dialog.destroy()
+
+    def _on_voice_selected_from_menu(self, radio, engine, voice_code):
+        if radio.get_active():
+            self.current_engine = engine
+            self.current_voice = voice_code
+            save_settings(voice=voice_code, engine=engine)
+            self.status_item.set_label(f"Voz: {voice_code} ({engine})")
 
     def _on_speed_toggled(self, radio, speed_val):
         if radio.get_active():
