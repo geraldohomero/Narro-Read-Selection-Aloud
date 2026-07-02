@@ -62,11 +62,16 @@ chmod +x "$INSTALL_DIR/config_dialog.py"
 chmod +x "$INSTALL_DIR/ler_texto.sh"
 chmod +x "$INSTALL_DIR/parar_leitura.sh"
 
+# Copia o pacote narro_rsa/
+mkdir -p "$INSTALL_DIR/narro_rsa"
+cp "$SCRIPT_DIR"/narro_rsa/*.py "$INSTALL_DIR/narro_rsa/"
+
 echo "✅ Instalado em $INSTALL_DIR:"
-echo "   - ler_texto.py        (app GTK principal)"
+echo "   - ler_texto.py        (entrypoint do player GTK)"
 echo "   - config_dialog.py    (diálogo de configurações GTK4)"
 echo "   - ler_texto.sh        (wrapper para atalho)"
 echo "   - parar_leitura.sh    (parar leitura)"
+echo "   - narro_rsa/          (pacote Python do projeto)"
 echo ""
 echo "📋 Configure o atalho no GNOME:"
 echo "   Configurações → Teclado → Atalhos personalizados"

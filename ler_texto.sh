@@ -4,7 +4,8 @@
 #   - Se o indicador já está rodando: envia SIGUSR1 para nova leitura
 #   - Se não está rodando: inicia o indicador na tray
 
-LOCKFILE="/tmp/narro-rsa.lock"
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
+LOCKFILE="$RUNTIME_DIR/narro-rsa.lock"
 
 # 1. Copia o texto selecionado para o clipboard (sem precisar de Ctrl+C manual)
 SELECTED=$(wl-paste --primary 2>/dev/null)
@@ -21,7 +22,7 @@ if [ -f "$LOCKFILE" ]; then
         exit 0
     else
         # Lockfile obsoleto — limpa
-        rm -f "$LOCKFILE" /tmp/narro-rsa.mp3 /tmp/narro-rsa-mpv.sock 2>/dev/null
+        rm -f "$LOCKFILE" "$RUNTIME_DIR/narro-rsa.mp3" "$RUNTIME_DIR/narro-rsa-mpv.sock" 2>/dev/null
         pkill -f "mpv.*narro-rsa" 2>/dev/null || true
     fi
 fi

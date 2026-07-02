@@ -3,90 +3,48 @@
 Narro-RSA — Diálogo de Configurações em GTK 4 (Mecanismo -> Dropdown Idioma -> Voz)
 """
 
-import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, GLib, Gdk, Gio
+from __future__ import annotations
 
+import asyncio
+import json
 import os
 import sys
-import json
-import urllib.request
 import threading
-import socket
-import asyncio
+import urllib.request
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gdk, GLib, Gtk
+
+from narro_rsa.constants import CONFIG_DIR, EDGE_VOICES_CACHE, PIPER_VOICES_DIR
+from narro_rsa.mpv_control import send_mpv_command
+from narro_rsa.settings import load_settings, save_settings
+
 
 # ============================================================================
-# Configurações & Caminhos
+# Helpers de Cache de Vozes
 # ============================================================================
 
-CONFIG_DIR        = os.path.expanduser("~/.config/narro-rsa")
-CONFIG_FILE       = os.path.join(CONFIG_DIR, "settings.json")
-PIPER_VOICES_DIR  = os.path.join(CONFIG_DIR, "piper-voices")
-EDGE_VOICES_CACHE = os.path.join(CONFIG_DIR, "edge_voices.json")
-MPV_SOCKET        = "/tmp/narro-rsa-mpv.sock"
 
-# ============================================================================
-# Helpers de Configurações
-# ============================================================================
-
-def load_settings():
-    try:
-        with open(CONFIG_FILE, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return {}
-
-
-def save_settings(voice=None, speed=None, engine=None, theme=None, ui_lang=None):
-    settings = load_settings()
-    if voice is not None:
-        settings["voice"] = voice
-    if speed is not None:
-        settings["speed"] = speed
-    if engine is not None:
-        settings["engine"] = engine
-    if theme is not None:
-        settings["theme"] = theme
-    if ui_lang is not None:
-        settings["ui_lang"] = ui_lang
-    try:
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(settings, f)
-    except OSError:
-        pass
-
-
-def send_mpv_command(command):
-    try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(1)
-        sock.connect(MPV_SOCKET)
-        payload = json.dumps({"command": command}) + "\n"
-        sock.sendall(payload.encode())
-        response = sock.recv(4096).decode()
-        sock.close()
-        return json.loads(response)
-    except Exception:
-        return None
-
-
-def load_edge_voices_cache():
+def load_edge_voices_cache() -> list[dict] | None:
+    """Carrega o cache local de vozes Edge-TTS."""
     try:
         if os.path.exists(EDGE_VOICES_CACHE):
-            with open(EDGE_VOICES_CACHE, "r") as f:
-                return json.load(f)
-    except Exception:
+            with open(EDGE_VOICES_CACHE, "r", encoding="utf-8") as fh:
+                return json.load(fh)
+    except (json.JSONDecodeError, OSError):
         pass
     return None
 
 
-def save_edge_voices_cache(voices):
+def save_edge_voices_cache(voices: list[dict]) -> None:
+    """Salva o cache local de vozes Edge-TTS."""
     try:
         os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(EDGE_VOICES_CACHE, "w") as f:
-            json.dump(voices, f)
-    except Exception:
+        with open(EDGE_VOICES_CACHE, "w", encoding="utf-8") as fh:
+            json.dump(voices, fh, ensure_ascii=False)
+    except OSError:
         pass
 
 # ============================================================================
@@ -275,7 +233,7 @@ FALLBACK_EDGE_VOICES = [
 class ConfigWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title=_("title"))
-        self.set_default_size(640, 680)
+        self.set_default_size(600, 520)
 
         # Carrega preferências salvas
         self.settings = load_settings()
@@ -350,11 +308,11 @@ class ConfigWindow(Gtk.ApplicationWindow):
         popover_box.append(self.lang_zh_radio)
 
         # Layout principal da janela (vertical)
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=15)
-        main_box.set_margin_start(18)
-        main_box.set_margin_end(18)
-        main_box.set_margin_top(18)
-        main_box.set_margin_bottom(18)
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        main_box.set_margin_start(12)
+        main_box.set_margin_end(12)
+        main_box.set_margin_top(12)
+        main_box.set_margin_bottom(12)
         self.set_child(main_box)
 
         # ── Seção de Voz Ativa no Topo ──
@@ -450,6 +408,7 @@ class ConfigWindow(Gtk.ApplicationWindow):
         # ScrolledWindow + TreeView de Vozes
         self.voice_scrolled = Gtk.ScrolledWindow()
         self.voice_scrolled.set_vexpand(True)
+        self.voice_scrolled.set_min_content_height(180)
         self.voice_scrolled.add_css_class("list-frame")
         main_box.append(self.voice_scrolled)
 

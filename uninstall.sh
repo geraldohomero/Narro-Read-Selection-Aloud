@@ -15,8 +15,18 @@ INSTALLED_FILES=(
     "$INSTALL_DIR/ler_texto.sh"
     "$INSTALL_DIR/parar_leitura.sh"
 )
+INSTALLED_DIRS=(
+    "$INSTALL_DIR/narro_rsa"
+)
+
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 
 TMP_FILES=(
+    "$RUNTIME_DIR/narro-rsa.mp3"
+    "$RUNTIME_DIR/narro-rsa.wav"
+    "$RUNTIME_DIR/narro-rsa.lock"
+    "$RUNTIME_DIR/narro-rsa-mpv.sock"
+    # Fallback para /tmp (instalações antigas)
     "/tmp/narro-rsa.mp3"
     "/tmp/narro-rsa.wav"
     "/tmp/narro-rsa.lock"
@@ -83,6 +93,12 @@ for f in "${INSTALLED_FILES[@]}"; do
     if [ -f "$f" ]; then
         rm -f "$f"
         echo "   ✓ Removido: $f"
+    fi
+done
+for d in "${INSTALLED_DIRS[@]}"; do
+    if [ -d "$d" ]; then
+        rm -rf "$d"
+        echo "   ✓ Removido: $d/"
     fi
 done
 
