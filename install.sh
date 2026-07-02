@@ -17,6 +17,7 @@ command -v wl-paste    >/dev/null 2>&1 || MISSING+=("wl-clipboard")
 command -v mpv         >/dev/null 2>&1 || MISSING+=("mpv")
 command -v notify-send >/dev/null 2>&1 || MISSING+=("libnotify")
 python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk" 2>/dev/null || MISSING+=("python3-gobject gtk3")
+python3 -c "import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk" 2>/dev/null || MISSING+=("gtk4")
 python3 -c "
 import gi
 try:
@@ -39,7 +40,7 @@ if [ ${#MISSING[@]} -gt 0 ]; then
     done
     echo ""
     echo "Instale com:"
-    echo "   sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3"
+    echo "   sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4"
     echo "   pipx install edge-tts"
     echo ""
     read -rp "Continuar mesmo assim? [s/N] " answer
@@ -53,14 +54,17 @@ mkdir -p "$INSTALL_DIR"
 
 # Copia e torna executável
 cp "$SCRIPT_DIR/ler_texto.py" "$INSTALL_DIR/ler_texto.py"
+cp "$SCRIPT_DIR/config_dialog.py" "$INSTALL_DIR/config_dialog.py"
 cp "$SCRIPT_DIR/ler_texto.sh" "$INSTALL_DIR/ler_texto.sh"
 cp "$SCRIPT_DIR/parar_leitura.sh" "$INSTALL_DIR/parar_leitura.sh"
 chmod +x "$INSTALL_DIR/ler_texto.py"
+chmod +x "$INSTALL_DIR/config_dialog.py"
 chmod +x "$INSTALL_DIR/ler_texto.sh"
 chmod +x "$INSTALL_DIR/parar_leitura.sh"
 
 echo "✅ Instalado em $INSTALL_DIR:"
 echo "   - ler_texto.py        (app GTK principal)"
+echo "   - config_dialog.py    (diálogo de configurações GTK4)"
 echo "   - ler_texto.sh        (wrapper para atalho)"
 echo "   - parar_leitura.sh    (parar leitura)"
 echo ""

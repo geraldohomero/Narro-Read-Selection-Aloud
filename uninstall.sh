@@ -11,6 +11,7 @@ PIPER_DIR="${CONFIG_DIR}/piper-voices"
 
 INSTALLED_FILES=(
     "$INSTALL_DIR/ler_texto.py"
+    "$INSTALL_DIR/config_dialog.py"
     "$INSTALL_DIR/ler_texto.sh"
     "$INSTALL_DIR/parar_leitura.sh"
 )
@@ -74,6 +75,7 @@ pkill -f "mpv.*narro-rsa" 2>/dev/null || true
 pkill -f "edge-tts.*narro-rsa" 2>/dev/null || true
 pkill -f "piper.*narro-rsa" 2>/dev/null || true
 pkill -f "ler_texto.py" 2>/dev/null || true
+pkill -f "config_dialog.py" 2>/dev/null || true
 
 # 2. Remove scripts instalados
 echo "🗂️  Removendo scripts de $INSTALL_DIR…"

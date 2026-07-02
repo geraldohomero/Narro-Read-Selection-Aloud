@@ -6,9 +6,8 @@ Selecione texto em qualquer aplicativo, copie com Ctrl+C, e use um atalho de tec
 
 ![Player TTS](https://img.shields.io/badge/GTK3-Player-blue?style=for-the-badge)
 
-![alt text](assets/image.png)
+![image-hero](assets/image-hero.png)
 
-![alt text](assets/image-1.png)
 
 ## Funcionalidades
 
