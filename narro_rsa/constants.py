@@ -23,6 +23,7 @@ LOCKFILE: str = os.path.join(_RUNTIME_DIR, "narro-rsa.lock")
 MPV_SOCKET: str = os.path.join(_RUNTIME_DIR, "narro-rsa-mpv.sock")
 TMP_AUDIO_MP3: str = os.path.join(_RUNTIME_DIR, "narro-rsa.mp3")
 TMP_AUDIO_WAV: str = os.path.join(_RUNTIME_DIR, "narro-rsa.wav")
+TMP_TEXT_FILE: str = os.path.join(_RUNTIME_DIR, "narro-rsa-text.txt")
 
 # ---------------------------------------------------------------------------
 # Caminhos de configuração persistente

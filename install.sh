@@ -164,6 +164,7 @@ echo "   - narro_rsa/          (pacote Python do projeto)"
 echo ""
 
 # Função para configurar atalhos de teclado no GNOME
+# Função para configurar atalhos de teclado no GNOME
 configure_gnome_shortcuts() {
     if ! command -v gsettings >/dev/null 2>&1; then
         return 1
@@ -179,26 +180,10 @@ configure_gnome_shortcuts() {
     KEY_PATH="org.gnome.settings-daemon.plugins.media-keys"
     CUSTOM_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
 
-    READ_NAME="Leitor TTS (Narro)"
-    READ_CMD="bash -c \"\$HOME/.local/bin/ler_texto.sh\""
-    READ_BINDING="<Super><Alt>l"
-
-    READ_ALT_NAME="Leitor TTS (Narro) [Ctrl+\\]"
-    READ_ALT_CMD="bash -c \"\$HOME/.local/bin/ler_texto.sh\""
-    READ_ALT_BINDING="<Primary>backslash"
-
-    PAUSE_NAME="Pausar leitura TTS (Narro)"
-    PAUSE_CMD="bash -c \"\$HOME/.local/bin/pausar_leitura.sh\""
-    PAUSE_BINDING="<Super><Alt>j"
-
-    STOP_NAME="Parar leitura TTS (Narro)"
-    STOP_CMD="bash -c \"\$HOME/.local/bin/parar_leitura.sh\""
-    STOP_BINDING="<Super><Alt>k"
-
-    # Obtém a lista atual de atalhos personalizados
+    # -------------------------------------------------------------
+    # Limpeza prévia de atalhos Narro existentes e duplicados
+    # -------------------------------------------------------------
     current_list_str=$(gsettings get $KEY_PATH custom-keybindings 2>/dev/null || echo "[]")
-    
-    # Limpa a lista para processamento
     cleaned_list=$(echo "$current_list_str" | tr -d '[]'"'" | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$') || true
     
     existing_paths=()
@@ -208,29 +193,39 @@ configure_gnome_shortcuts() {
         fi
     done
 
-    READ_PATH=""
-    READ_ALT_PATH=""
-    PAUSE_PATH=""
-    STOP_PATH=""
-
-    # Procura se os atalhos já existem
+    paths_to_keep=()
     for path in "${existing_paths[@]}"; do
         name=$(gsettings get "${KEY_PATH}.custom-keybinding:${path}" name 2>/dev/null || echo "")
-        name=$(echo "$name" | tr -d "'\"")
-        if [ "$name" = "$READ_NAME" ]; then
-            READ_PATH="$path"
-        elif [ "$name" = "$READ_ALT_NAME" ]; then
-            READ_ALT_PATH="$path"
-        elif [ "$name" = "$PAUSE_NAME" ]; then
-            PAUSE_PATH="$path"
-        elif [ "$name" = "$STOP_NAME" ]; then
-            STOP_PATH="$path"
+        name=$(echo "$name" | tr -d "'\"" | xargs)
+        if [[ "$name" == "Leitor TTS (Narro)" ]] || [[ "$name" == "Leitor TTS (Narro) [Ctrl+\\]" ]] || [[ "$name" == "Pausar leitura TTS (Narro)" ]] || [[ "$name" == "Parar leitura TTS (Narro)" ]] || [[ "$name" == "tts-tablet" ]]; then
+            gsettings reset-recursively "${KEY_PATH}.custom-keybinding:${path}" 2>/dev/null || true
+        else
+            paths_to_keep+=("$path")
         fi
     done
 
+    # -------------------------------------------------------------
+    # Configuração dos novos atalhos com caminhos absolutos
+    # -------------------------------------------------------------
+    READ_NAME="Leitor TTS (Narro)"
+    READ_CMD="${HOME}/.local/bin/ler_texto.sh"
+    READ_BINDING="<Super><Alt>l"
+
+    READ_ALT_NAME="Leitor TTS (Narro) [Ctrl+\\]"
+    READ_ALT_CMD="${HOME}/.local/bin/ler_texto.sh --primary"
+    READ_ALT_BINDING="<Primary>backslash"
+
+    PAUSE_NAME="Pausar leitura TTS (Narro)"
+    PAUSE_CMD="${HOME}/.local/bin/pausar_leitura.sh"
+    PAUSE_BINDING="<Super><Alt>j"
+
+    STOP_NAME="Parar leitura TTS (Narro)"
+    STOP_CMD="${HOME}/.local/bin/parar_leitura.sh"
+    STOP_BINDING="<Super><Alt>k"
+
     # Determina o próximo índice customizado disponível
     max_idx=-1
-    for path in "${existing_paths[@]}"; do
+    for path in "${paths_to_keep[@]}"; do
         if [[ "$path" =~ custom([0-9]+)/$ ]]; then
             idx="${BASH_REMATCH[1]}"
             if [ "$idx" -gt "$max_idx" ]; then
@@ -239,29 +234,21 @@ configure_gnome_shortcuts() {
         fi
     done
 
-    if [ -z "$READ_PATH" ]; then
-        max_idx=$((max_idx + 1))
-        READ_PATH="${CUSTOM_PATH}/custom${max_idx}/"
-        existing_paths+=("$READ_PATH")
-    fi
+    max_idx=$((max_idx + 1))
+    READ_PATH="${CUSTOM_PATH}/custom${max_idx}/"
+    paths_to_keep+=("$READ_PATH")
 
-    if [ -z "$READ_ALT_PATH" ]; then
-        max_idx=$((max_idx + 1))
-        READ_ALT_PATH="${CUSTOM_PATH}/custom${max_idx}/"
-        existing_paths+=("$READ_ALT_PATH")
-    fi
+    max_idx=$((max_idx + 1))
+    READ_ALT_PATH="${CUSTOM_PATH}/custom${max_idx}/"
+    paths_to_keep+=("$READ_ALT_PATH")
 
-    if [ -z "$PAUSE_PATH" ]; then
-        max_idx=$((max_idx + 1))
-        PAUSE_PATH="${CUSTOM_PATH}/custom${max_idx}/"
-        existing_paths+=("$PAUSE_PATH")
-    fi
+    max_idx=$((max_idx + 1))
+    PAUSE_PATH="${CUSTOM_PATH}/custom${max_idx}/"
+    paths_to_keep+=("$PAUSE_PATH")
 
-    if [ -z "$STOP_PATH" ]; then
-        max_idx=$((max_idx + 1))
-        STOP_PATH="${CUSTOM_PATH}/custom${max_idx}/"
-        existing_paths+=("$STOP_PATH")
-    fi
+    max_idx=$((max_idx + 1))
+    STOP_PATH="${CUSTOM_PATH}/custom${max_idx}/"
+    paths_to_keep+=("$STOP_PATH")
 
     # Configura os atalhos
     gsettings set "${KEY_PATH}.custom-keybinding:${READ_PATH}" name "$READ_NAME"
@@ -282,7 +269,7 @@ configure_gnome_shortcuts() {
 
     # Atualiza a lista master de atalhos personalizados
     new_list_elements=()
-    for path in "${existing_paths[@]}"; do
+    for path in "${paths_to_keep[@]}"; do
         new_list_elements+=("'$path'")
     done
 
@@ -290,6 +277,16 @@ configure_gnome_shortcuts() {
     formatted_list="[$joined_list]"
 
     gsettings set $KEY_PATH custom-keybindings "$formatted_list"
+
+    # Desativa notificações para o wl-clipboard no GNOME para evitar popups irritantes de foco
+    current_apps=$(gsettings get org.gnome.desktop.notifications application-children 2>/dev/null || echo "[]")
+    if [[ ! "$current_apps" =~ "io-github-bugaevc-wl-clipboard" ]]; then
+        new_apps=$(echo "$current_apps" | sed "s/\]$/, 'io-github-bugaevc-wl-clipboard'\]/")
+        gsettings set org.gnome.desktop.notifications application-children "$new_apps" 2>/dev/null || true
+    fi
+    gsettings set org.gnome.desktop.notifications.application:/org/gnome/desktop/notifications/application/io-github-bugaevc-wl-clipboard/ enable false 2>/dev/null || true
+    gsettings set org.gnome.desktop.notifications.application:/org/gnome/desktop/notifications/application/io-github-bugaevc-wl-clipboard/ show-banners false 2>/dev/null || true
+    gsettings set org.gnome.desktop.notifications.application:/org/gnome/desktop/notifications/application/io-github-bugaevc-wl-clipboard/ application-id "'io.github.bugaevc.wl-clipboard'" 2>/dev/null || true
 
     echo "   ✓ Atalho \"$READ_NAME\" configurado para Super+Alt+L"
     echo "   ✓ Atalho \"$READ_ALT_NAME\" configurado para Ctrl+\\"
@@ -302,7 +299,7 @@ if configure_gnome_shortcuts; then
     echo ""
     echo "🎉 Atalhos do GNOME configurados automaticamente!"
     echo "   - Super+Alt+L: Iniciar leitura (Leitor TTS)"
-    echo "   - Ctrl+\\: Iniciar leitura direta (copia e lê)"
+    echo "   - Ctrl+\\: Iniciar leitura direta da seleção"
     echo "   - Super+Alt+J: Pausar/Retomar leitura"
     echo "   - Super+Alt+K: Parar leitura"
     echo ""
@@ -314,22 +311,22 @@ else
     echo ""
     echo "   Atalho 1 — Abrir Leitor TTS:"
     echo "     Nome:    Leitor TTS (Narro)"
-    echo "     Comando: bash -c \"\$HOME/.local/bin/ler_texto.sh\""
+    echo "     Comando: ${HOME}/.local/bin/ler_texto.sh"
     echo "     Tecla:   Super+Alt+L"
     echo ""
     echo "   Atalho 2 — Abrir Leitor TTS (direto):"
     echo "     Nome:    Leitor TTS (Narro) [Ctrl+\\\\]"
-    echo "     Comando: bash -c \"\$HOME/.local/bin/ler_texto.sh\""
+    echo "     Comando: ${HOME}/.local/bin/ler_texto.sh --primary"
     echo "     Tecla:   Ctrl+\\"
     echo ""
     echo "   Atalho 3 — Pausar/Retomar leitura (opcional):"
     echo "     Nome:    Pausar leitura TTS (Narro)"
-    echo "     Comando: bash -c \"\$HOME/.local/bin/pausar_leitura.sh\""
+    echo "     Comando: ${HOME}/.local/bin/pausar_leitura.sh"
     echo "     Tecla:   Super+Alt+J"
     echo ""
     echo "   Atalho 4 — Parar leitura (opcional):"
     echo "     Nome:    Parar leitura TTS (Narro)"
-    echo "     Comando: bash -c \"\$HOME/.local/bin/parar_leitura.sh\""
+    echo "     Comando: ${HOME}/.local/bin/parar_leitura.sh"
     echo "     Tecla:   Super+Alt+K"
     echo ""
     if [ $ret -eq 2 ]; then

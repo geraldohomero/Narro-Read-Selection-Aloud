@@ -36,6 +36,7 @@ from .constants import (
     SPEED_MIN,
     TMP_AUDIO_MP3,
     TMP_AUDIO_WAV,
+    TMP_TEXT_FILE,
     VALID_ENGINES,
 )
 from .mpv_control import kill_mpv, send_mpv_command
@@ -243,11 +244,22 @@ class TTSIndicator:
     # Controles de reprodução
     # ------------------------------------------------------------------
 
-    def _start_new_reading(self) -> None:
-        """Captura texto do clipboard e inicia a leitura."""
-        text = get_clipboard_text()
+    def _start_new_reading(self, text: str | None = None) -> None:
+        """Inicia a leitura (lê o texto passado, de arquivo temporário ou do clipboard)."""
         if not text:
-            self._set_status("Nenhum texto no clipboard")
+            if os.path.exists(TMP_TEXT_FILE):
+                try:
+                    with open(TMP_TEXT_FILE, "r", encoding="utf-8") as fh:
+                        text = fh.read()
+                    os.unlink(TMP_TEXT_FILE)
+                except OSError:
+                    pass
+
+        if not text:
+            text = get_clipboard_text()
+
+        if not text:
+            self._set_status("Nenhum texto encontrado")
             return
 
         # Recarrega configurações mais recentes (podem ter sido alteradas

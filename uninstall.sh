@@ -27,11 +27,13 @@ TMP_FILES=(
     "$RUNTIME_DIR/narro-rsa.wav"
     "$RUNTIME_DIR/narro-rsa.lock"
     "$RUNTIME_DIR/narro-rsa-mpv.sock"
+    "$RUNTIME_DIR/narro-rsa-text.txt"
     # Fallback para /tmp (instalações antigas)
     "/tmp/narro-rsa.mp3"
     "/tmp/narro-rsa.wav"
     "/tmp/narro-rsa.lock"
     "/tmp/narro-rsa-mpv.sock"
+    "/tmp/narro-rsa-text.txt"
 )
 
 echo "🗑️  Desinstalação do Narro-RSA"

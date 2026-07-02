@@ -21,7 +21,7 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
 
 from narro_rsa.clipboard import get_clipboard_text
-from narro_rsa.constants import LOCKFILE, MPV_SOCKET, TMP_AUDIO_MP3, TMP_AUDIO_WAV
+from narro_rsa.constants import LOCKFILE, MPV_SOCKET, TMP_AUDIO_MP3, TMP_AUDIO_WAV, TMP_TEXT_FILE
 from narro_rsa.indicator import TTSIndicator
 from narro_rsa.mpv_control import kill_mpv
 
@@ -29,17 +29,18 @@ from narro_rsa.mpv_control import kill_mpv
 def _cleanup() -> None:
     """Remove arquivos temporários e encerra o mpv."""
     kill_mpv()
-    for path in (TMP_AUDIO_MP3, TMP_AUDIO_WAV, LOCKFILE, MPV_SOCKET):
+    for path in (TMP_AUDIO_MP3, TMP_AUDIO_WAV, LOCKFILE, MPV_SOCKET, TMP_TEXT_FILE):
         try:
             os.unlink(path)
         except OSError:
             pass
 
 
-def _acquire_single_instance() -> bool:
+def _acquire_single_instance(text: str) -> bool:
     """Verifica se já há uma instância rodando.
 
-    Se já existe uma instância ativa, envia SIGUSR1 para ela e encerra.
+    Se já existe uma instância ativa, escreve o texto no arquivo temporário,
+    envia SIGUSR1 para ela e encerra.
 
     Returns:
         ``True`` se esta é a instância principal (pode continuar).
@@ -49,6 +50,16 @@ def _acquire_single_instance() -> bool:
         try:
             with open(LOCKFILE, "r", encoding="utf-8") as fh:
                 old_pid = int(fh.read().strip())
+            # Verifica se o processo realmente existe
+            os.kill(old_pid, 0)
+            
+            if text:
+                try:
+                    with open(TMP_TEXT_FILE, "w", encoding="utf-8") as fh:
+                        fh.write(text)
+                except OSError:
+                    pass
+
             # Envia SIGUSR1 para a instância existente (nova leitura)
             os.kill(old_pid, signal.SIGUSR1)
             sys.exit(0)
@@ -67,7 +78,10 @@ def _acquire_single_instance() -> bool:
 
 def main() -> None:
     """Ponto de entrada principal do Narro-RSA."""
-    _acquire_single_instance()
+    use_primary = "--primary" in sys.argv
+    text = get_clipboard_text(primary=use_primary)
+
+    _acquire_single_instance(text)
 
     # Cria o indicador na tray
     indicator = TTSIndicator()
@@ -95,10 +109,9 @@ def main() -> None:
     signal.signal(signal.SIGTERM, on_sigterm)
     signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-    # Auto-play: captura texto do clipboard e inicia automaticamente
-    text = get_clipboard_text()
+    # Auto-play: se já carregou com texto inicial
     if text:
-        GLib.idle_add(indicator._start_new_reading)
+        GLib.idle_add(indicator._start_new_reading, text)
 
     try:
         Gtk.main()
