@@ -1,31 +1,32 @@
 # Narro - Read Selection Aloud
 
-Leitor de texto em voz alta com suporte a Edge TTS (online) e Piper TTS (offline) para o GNOME/Wayland.
+[English](README.md) | [Português (Brasil)](README.pt-br.md) | [简体中文](README.zh-cn.md)
 
-Selecione texto em qualquer aplicativo, copie com Ctrl+C, e use um atalho de teclado para abrir o player TTS — com controles de Play/Pause/Stop, seleção de motor/idioma/voz e controle de velocidade.
+Text-to-speech (TTS) reader with support for Edge TTS (online) and Piper TTS (offline) for GNOME/Wayland.
 
-![Player TTS](https://img.shields.io/badge/GTK3-Player-blue?style=for-the-badge)
+Select text in any application, copy it with Ctrl+C, and use a keyboard shortcut to open the TTS player — featuring Play/Pause/Stop controls, engine/language/voice selection, and speed control.
+
+![TTS Player](https://img.shields.io/badge/GTK3-Player-blue?style=for-the-badge)
 
 ![image-hero](assets/image-hero.png)
 
+## Features
 
-## Funcionalidades
+- Full playback controls (Play, Pause, Stop).
+- Two supported text-to-speech engines: Edge TTS (cloud neural voices) and Piper TTS (ultra-fast local voices running completely offline).
+- New voice selection tab structured as: Voice -> Engine (Edge TTS or Piper TTS) -> Language -> Select.
+- Native GTK4 configuration dialog that lists available voices, displays the download status of local models (for Piper), and lets you download them directly within the UI with a real-time progress bar.
+- Downloaded Piper voices are stored in the user's local config folder (`~/.config/narro-rsa/piper-voices/`).
+- Real-time speed control via mpv (applicable to both engines).
+- Native GTK interface visually integrated with GNOME.
+- Status bar providing process feedback.
 
-- Controles completos de reprodução (Play, Pause, Stop).
-- Dois motores de síntese suportados: Edge TTS (vozes neurais da nuvem) e Piper TTS (vozes locais ultrarrápidas rodando totalmente offline).
-- Nova aba de seleção de voz estruturada em: Voz -> Engine (Edge TTS ou Piper TTS) -> Língua -> Selecionar.
-- Diálogo de configuração nativo em GTK4 que permite listar as vozes disponíveis, visualizar o status de download do modelo local (para o Piper) e baixá-los diretamente pela interface com uma barra de progresso em tempo real.
-- As vozes baixadas do Piper são guardadas em uma pasta local do usuário (`~/.config/narro-rsa/piper-voices/`).
-- Controle de velocidade em tempo real via mpv (aplicável a ambos os motores).
-- Interface GTK nativa integrada visualmente com o GNOME.
-- Barra de status com informações de feedback do processo.
+## Dependencies
 
-## Dependências
-
-| Pacote | Instalação |
+| Package | Installation |
 |---|---|
 | edge-tts | pipx install edge-tts |
-| piper-tts | pipx install piper-tts ou instale o binário do piper no PATH (ex: ~/.local/bin/piper) |
+| piper-tts | pipx install piper-tts or install the piper binary in your PATH (e.g., ~/.local/bin/piper) |
 | mpv | sudo dnf install mpv |
 | wl-clipboard | sudo dnf install wl-clipboard |
 | python3-gobject | sudo dnf install python3-gobject |
@@ -33,16 +34,16 @@ Selecione texto em qualquer aplicativo, copie com Ctrl+C, e use um atalho de tec
 | gtk4 | sudo dnf install gtk4 |
 | libnotify | sudo dnf install libnotify |
 
-Comandos para instalação das dependências:
+Commands to install dependencies:
 
 ```bash
 sudo dnf install wl-clipboard mpv python3-gobject gtk3 gtk4 libnotify
 pipx install edge-tts
 ```
 
-Nota: Para usar o Piper TTS, garanta que o binário do `piper` esteja disponível no seu PATH de execução ou instalado diretamente em `~/.local/bin/piper`.
+Note: To use Piper TTS, ensure that the `piper` binary is available in your execution PATH or installed directly in `~/.local/bin/piper`.
 
-## Instalação
+## Installation
 
 ```bash
 git clone https://github.com/geraldohomero/narro-rsa.git
@@ -50,73 +51,86 @@ cd narro-rsa
 bash install.sh
 ```
 
-O script `install.sh` copia os arquivos necessários para `~/.local/bin/` (incluindo o pacote `narro_rsa/`) e verifica as dependências.
+The `install.sh` script copies the required files to `~/.local/bin/` (including the `narro_rsa/` package) and checks dependencies.
 
-## Desinstalação
+## Uninstallation
 
-Para remover completamente o Narro-RSA do sistema:
+To completely remove Narro-RSA from your system:
 
 ```bash
 bash uninstall.sh
 ```
 
-O script remove:
-- Scripts e pacote instalados em `~/.local/bin/`
-- Configurações salvas e vozes locais do Piper em `~/.config/narro-rsa/`
-- Arquivos temporários em `$XDG_RUNTIME_DIR` (e `/tmp/` para instalações antigas)
-- Processos em andamento (mpv, edge-tts, piper)
+The script removes:
+- Installed scripts and packages in `~/.local/bin/`
+- Saved settings and local Piper voices in `~/.config/narro-rsa/`
+- Temporary files in `$XDG_RUNTIME_DIR` (and `/tmp/` for older installations)
+- Running processes (mpv, edge-tts, piper)
 
-Após desinstalar, lembre-se de remover manualmente os atalhos de teclado configurados no GNOME.
+After uninstalling, remember to manually remove the configured keyboard shortcuts in GNOME.
 
-## Configuração dos atalhos no GNOME
+## GNOME Keyboard Shortcuts Configuration
 
-Abra: Configurações -> Teclado -> Atalhos de teclado -> Atalhos personalizados
+> [!NOTE]
+> The `install.sh` and `uninstall.sh` scripts now configure and remove these shortcuts **automatically** if you are running GNOME.
 
-### Atalho 1 — Abrir Leitor TTS
-- Nome: Leitor TTS
-- Comando: `bash -c "$HOME/.local/bin/ler_texto.sh"`
-- Atalho sugerido: Super+Alt+L
+If you need to configure or adjust them manually, open: Settings -> Keyboard -> Keyboard Shortcuts -> Custom Shortcuts:
 
-### Atalho 2 — Parar leitura (opcional)
-- Nome: Parar leitura TTS
-- Comando: `bash -c "$HOME/.local/bin/parar_leitura.sh"`
-- Atalho sugerido: Super+Alt+K
+### Shortcut 1 — Open TTS Reader
+- Name: `Leitor TTS (Narro)`
+- Command: `bash -c "$HOME/.local/bin/ler_texto.sh"`
+- Shortcut: `Super+Alt+L`
 
-## Como usar
+### Shortcut 2 — Open TTS Reader (direct)
+- Name: `Leitor TTS (Narro) [Ctrl+\]`
+- Command: `bash -c "$HOME/.local/bin/ler_texto.sh"`
+- Shortcut: `Ctrl+\` (Automatically captures the active text selection without needing Ctrl+C)
 
-1. Abra um documento ou PDF (por exemplo, no Okular).
-2. Selecione o texto desejado com a ferramenta de seleção.
-3. Copie com Ctrl+C.
-4. Pressione Super+Alt+L (ou o atalho configurado).
-5. O player abrirá na tray do sistema.
-6. Vá em Configurações para escolher o motor (Edge TTS ou Piper TTS), idioma e voz.
-7. No diálogo que se abrirá, escolha a voz desejada. Caso esteja configurando o Piper, clique em "Baixar voz selecionada" antes de confirmar a seleção.
-8. Clique em Play para iniciar a leitura.
-9. Use Pause para pausar/retomar e Stop para parar.
+### Shortcut 3 — Pause/Resume TTS reading (optional)
+- Name: `Pausar leitura TTS (Narro)`
+- Command: `bash -c "$HOME/.local/bin/pausar_leitura.sh"`
+- Shortcut: `Super+Alt+J`
 
-## Estrutura do Projeto
+### Shortcut 4 — Stop TTS reading (optional)
+- Name: `Parar leitura TTS (Narro)`
+- Command: `bash -c "$HOME/.local/bin/parar_leitura.sh"`
+- Shortcut: `Super+Alt+K`
+
+## How to Use
+
+1. Open a document or PDF (for example, in Okular).
+2. Select the desired text using the selection tool.
+3. Copy it with Ctrl+C.
+4. Press Super+Alt+L (or your configured shortcut).
+5. The player will open in the system tray.
+6. Go to Settings to choose the engine (Edge TTS or Piper TTS), language, and voice.
+7. In the dialog that opens, select your preferred voice. If configuring Piper, click "Download selected voice" before confirming the selection.
+8. Click Play to start reading.
+9. Use Pause to pause/resume and Stop to stop.
+
+## Project Structure
 
 ```
 narro-read-selection-aloud/
 ├── ler_texto.py           # Entrypoint — single-instance lock, signals, GTK main loop
-├── config_dialog.py       # Diálogo de configurações GTK4 (processo separado)
-├── narro_rsa/             # Pacote Python com a lógica do projeto
+├── config_dialog.py       # GTK4 configuration dialog (separate process)
+├── narro_rsa/             # Python package with project logic
 │   ├── __init__.py
-│   ├── constants.py       # Constantes e caminhos centralizados
-│   ├── settings.py        # Carrega/salva preferências JSON
-│   ├── mpv_control.py     # Comunicação IPC com mpv via socket Unix
-│   ├── text_formatter.py  # Formatação de texto para TTS (limpeza de PDFs)
-│   ├── clipboard.py       # Captura de texto do clipboard (Wayland)
-│   ├── tts_engine.py      # Motor TTS (Edge-TTS + Piper)
-│   └── indicator.py       # AppIndicator3 na tray do GNOME
-├── ler_texto.sh           # Wrapper shell para atalho do GNOME
-├── parar_leitura.sh       # Script para interromper a leitura
-├── install.sh             # Instalador do sistema
-├── uninstall.sh           # Desinstalador
-├── assets/                # Imagens e recursos visuais
-└── README.md              # Documentação do projeto
+│   ├── constants.py       # Centralized paths and constants
+│   ├── settings.py        # Load/save JSON preferences
+│   ├── mpv_control.py     # IPC communication with mpv via Unix socket
+│   ├── text_formatter.py  # Text formatting for TTS (cleaning PDFs)
+│   ├── clipboard.py       # Clipboard text capture (Wayland)
+│   ├── tts_engine.py      # TTS Engine (Edge-TTS + Piper)
+│   └── indicator.py       # AppIndicator3 in the GNOME tray
+├── ler_texto.sh           # Shell wrapper for GNOME shortcut
+├── parar_leitura.sh       # Script to stop reading
+├── install.sh             # System installer
+├── uninstall.sh           # Uninstaller
+├── assets/                # Images and visual assets
+└── README.md              # Project documentation
 ```
 
-## Licença
+## License
 
 MIT

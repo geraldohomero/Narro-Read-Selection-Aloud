@@ -14,6 +14,7 @@ INSTALLED_FILES=(
     "$INSTALL_DIR/config_dialog.py"
     "$INSTALL_DIR/ler_texto.sh"
     "$INSTALL_DIR/parar_leitura.sh"
+    "$INSTALL_DIR/pausar_leitura.sh"
 )
 INSTALLED_DIRS=(
     "$INSTALL_DIR/narro_rsa"
@@ -118,10 +119,63 @@ for f in "${TMP_FILES[@]}"; do
     fi
 done
 
+# Função para remover os atalhos de teclado do GNOME
+remove_gnome_shortcuts() {
+    if ! command -v gsettings >/dev/null 2>&1; then
+        return
+    fi
+
+    echo "⚙️  Removendo atalhos de teclado do GNOME…"
+
+    KEY_PATH="org.gnome.settings-daemon.plugins.media-keys"
+    
+    READ_NAME="Leitor TTS (Narro)"
+    READ_ALT_NAME="Leitor TTS (Narro) [Ctrl+\\]"
+    PAUSE_NAME="Pausar leitura TTS (Narro)"
+    STOP_NAME="Parar leitura TTS (Narro)"
+
+    # Obtém a lista atual de atalhos personalizados
+    current_list_str=$(gsettings get $KEY_PATH custom-keybindings 2>/dev/null || echo "[]")
+    
+    cleaned_list=$(echo "$current_list_str" | tr -d '[]'"'" | tr ',' '\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' | grep -v '^$') || true
+    
+    existing_paths=()
+    for item in $cleaned_list; do
+        if [ "$item" != "@as" ]; then
+            existing_paths+=("$item")
+        fi
+    done
+
+    paths_to_keep=()
+    for path in "${existing_paths[@]}"; do
+        name=$(gsettings get "${KEY_PATH}.custom-keybinding:${path}" name 2>/dev/null || echo "")
+        name=$(echo "$name" | tr -d "'\"")
+        if [ "$name" = "$READ_NAME" ] || [ "$name" = "$READ_ALT_NAME" ] || [ "$name" = "$PAUSE_NAME" ] || [ "$name" = "$STOP_NAME" ]; then
+            # Reseta as chaves deste atalho específico
+            gsettings reset-recursively "${KEY_PATH}.custom-keybinding:${path}" 2>/dev/null || true
+        else
+            paths_to_keep+=("$path")
+        fi
+    done
+
+    # Reconstrói a lista de caminhos para atualizar o custom-keybindings
+    if [ ${#paths_to_keep[@]} -gt 0 ]; then
+        new_list_elements=()
+        for path in "${paths_to_keep[@]}"; do
+            new_list_elements+=("'$path'")
+        done
+        joined_list=$(IFS=,; echo "${new_list_elements[*]}")
+        formatted_list="[$joined_list]"
+    else
+        formatted_list="@as []"
+    fi
+
+    gsettings set $KEY_PATH custom-keybindings "$formatted_list" 2>/dev/null || true
+    echo "   ✓ Atalhos do Narro-RSA removidos do GNOME."
+}
+
+remove_gnome_shortcuts
+
 echo ""
 echo "✅ Narro-RSA foi completamente removido!"
-echo ""
-echo "📋 Lembrete: Remova manualmente os atalhos de teclado no GNOME:"
-echo "   Configurações → Teclado → Atalhos personalizados"
-echo "   - Remova o atalho \"Leitor TTS\""
-echo "   - Remova o atalho \"Parar leitura TTS\" (se configurado)"
+

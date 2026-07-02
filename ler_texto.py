@@ -78,6 +78,13 @@ def main() -> None:
 
     signal.signal(signal.SIGUSR1, on_sigusr1)
 
+    # SIGUSR2 — alternar pausa via atalho
+    def on_sigusr2(_sig: int, _frame: object) -> None:
+        indicator.toggle_pause()
+
+    signal.signal(signal.SIGUSR2, on_sigusr2)
+
+
     # SIGTERM — encerramento limpo
     def on_sigterm(_sig: int, _frame: object) -> None:
         indicator._stop_playback()

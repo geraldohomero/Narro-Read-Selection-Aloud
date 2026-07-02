@@ -410,3 +410,13 @@ class TTSIndicator:
         """
         self._start_new_reading()
         return False
+
+    def toggle_pause(self) -> None:
+        """Alterna a pausa de forma thread-safe (seguro para signal handlers)."""
+        def _toggle() -> None:
+            if self._is_playing:
+                self._pause_playback()
+            elif self._is_paused:
+                self._resume_playback()
+        GLib.idle_add(_toggle)
+
