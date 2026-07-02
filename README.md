@@ -23,22 +23,28 @@ Select text in any application, copy it with Ctrl+C, and use a keyboard shortcut
 
 ## Dependencies
 
-| Package | Installation |
-|---|---|
-| edge-tts | pipx install edge-tts |
-| piper-tts | pipx install piper-tts or install the piper binary in your PATH (e.g., ~/.local/bin/piper) |
-| mpv | sudo dnf install mpv |
-| wl-clipboard | sudo dnf install wl-clipboard |
-| python3-gobject | sudo dnf install python3-gobject |
-| gtk3 | sudo dnf install gtk3 |
-| gtk4 | sudo dnf install gtk4 |
-| libnotify | sudo dnf install libnotify |
+Choose the command for your Linux distribution to install system dependencies:
 
-Commands to install dependencies:
-
+### Fedora
 ```bash
-sudo dnf install wl-clipboard mpv python3-gobject gtk3 gtk4 libnotify
+sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3
+```
+
+### Ubuntu / Debian
+```bash
+sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1
+```
+
+### Arch Linux / Manjaro
+```bash
+sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator
+```
+
+### Python TTS Engines (All Distros)
+```bash
 pipx install edge-tts
+# Optional for local offline TTS:
+pipx install piper-tts
 ```
 
 Note: To use Piper TTS, ensure that the `piper` binary is available in your execution PATH or installed directly in `~/.local/bin/piper`.

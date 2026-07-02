@@ -23,22 +23,28 @@
 
 ## 依赖项
 
-| 软件包 | 安装方式 |
-|---|---|
-| edge-tts | pipx install edge-tts |
-| piper-tts | pipx install piper-tts 或将 piper 二进制文件安装到 PATH (例如 ~/.local/bin/piper) |
-| mpv | sudo dnf install mpv |
-| wl-clipboard | sudo dnf install wl-clipboard |
-| python3-gobject | sudo dnf install python3-gobject |
-| gtk3 | sudo dnf install gtk3 |
-| gtk4 | sudo dnf install gtk4 |
-| libnotify | sudo dnf install libnotify |
+根据您使用的 Linux 发行版选择相应的命令来安装系统依赖项：
 
-安装依赖项的命令：
-
+### Fedora
 ```bash
-sudo dnf install wl-clipboard mpv python3-gobject gtk3 gtk4 libnotify
+sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3
+```
+
+### Ubuntu / Debian
+```bash
+sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1
+```
+
+### Arch Linux / Manjaro
+```bash
+sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator
+```
+
+### Python 语音合成引擎（所有发行版）
+```bash
 pipx install edge-tts
+# 可选本地离线 TTS：
+pipx install piper-tts
 ```
 
 注意：若要使用 Piper TTS，请确保 `piper` 可执行文件在您的运行 PATH 中，或者直接安装在 `~/.local/bin/piper`。

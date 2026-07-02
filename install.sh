@@ -12,13 +12,42 @@ echo "📦 Instalando Narro-RSA…"
 echo ""
 
 # Verifica dependências
-MISSING=()
-command -v wl-paste    >/dev/null 2>&1 || MISSING+=("wl-clipboard")
-command -v mpv         >/dev/null 2>&1 || MISSING+=("mpv")
-command -v notify-send >/dev/null 2>&1 || MISSING+=("libnotify")
-python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk" 2>/dev/null || MISSING+=("python3-gobject gtk3")
-python3 -c "import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk" 2>/dev/null || MISSING+=("gtk4")
-python3 -c "
+FEDORA_PKGS=()
+UBUNTU_PKGS=()
+ARCH_PKGS=()
+PIP_PKGS=()
+
+if ! command -v wl-paste >/dev/null 2>&1; then
+    FEDORA_PKGS+=("wl-clipboard")
+    UBUNTU_PKGS+=("wl-clipboard")
+    ARCH_PKGS+=("wl-clipboard")
+fi
+
+if ! command -v mpv >/dev/null 2>&1; then
+    FEDORA_PKGS+=("mpv")
+    UBUNTU_PKGS+=("mpv")
+    ARCH_PKGS+=("mpv")
+fi
+
+if ! command -v notify-send >/dev/null 2>&1; then
+    FEDORA_PKGS+=("libnotify")
+    UBUNTU_PKGS+=("libnotify-bin")
+    ARCH_PKGS+=("libnotify")
+fi
+
+if ! python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk" 2>/dev/null; then
+    FEDORA_PKGS+=("python3-gobject" "gtk3")
+    UBUNTU_PKGS+=("python3-gi" "gir1.2-gtk-3.0")
+    ARCH_PKGS+=("python-gobject" "gtk3")
+fi
+
+if ! python3 -c "import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk" 2>/dev/null; then
+    FEDORA_PKGS+=("gtk4")
+    UBUNTU_PKGS+=("gir1.2-gtk-4.0")
+    ARCH_PKGS+=("gtk4")
+fi
+
+if ! python3 -c "
 import gi
 try:
     gi.require_version('AyatanaAppIndicator3', '0.1')
@@ -26,22 +55,79 @@ try:
 except ValueError:
     gi.require_version('AppIndicator3', '0.1')
     from gi.repository import AppIndicator3
-" 2>/dev/null || MISSING+=("libappindicator-gtk3")
+" 2>/dev/null; then
+    FEDORA_PKGS+=("libappindicator-gtk3")
+    UBUNTU_PKGS+=("gir1.2-ayatanaappindicator3-0.1")
+    ARCH_PKGS+=("libayatana-appindicator")
+fi
 
 if ! command -v edge-tts >/dev/null 2>&1 && \
    [ ! -x "${HOME}/.local/bin/edge-tts" ]; then
-    MISSING+=("edge-tts (via pipx)")
+    PIP_PKGS+=("edge-tts")
 fi
 
-if [ ${#MISSING[@]} -gt 0 ]; then
+if [ ${#FEDORA_PKGS[@]} -gt 0 ] || [ ${#PIP_PKGS[@]} -gt 0 ]; then
     echo "⚠️  Dependências faltando:"
-    for dep in "${MISSING[@]}"; do
-        echo "   - $dep"
-    done
+    
+    if ! command -v wl-paste >/dev/null 2>&1; then echo "   - wl-clipboard"; fi
+    if ! command -v mpv >/dev/null 2>&1; then echo "   - mpv"; fi
+    if ! command -v notify-send >/dev/null 2>&1; then echo "   - libnotify"; fi
+    if ! python3 -c "import gi; gi.require_version('Gtk', '3.0'); from gi.repository import Gtk" 2>/dev/null; then echo "   - python3-gobject / gtk3"; fi
+    if ! python3 -c "import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk" 2>/dev/null; then echo "   - gtk4"; fi
+    if ! python3 -c "
+import gi
+try:
+    gi.require_version('AyatanaAppIndicator3', '0.1')
+    from gi.repository import AyatanaAppIndicator3
+except ValueError:
+    gi.require_version('AppIndicator3', '0.1')
+    from gi.repository import AppIndicator3
+" 2>/dev/null; then echo "   - libappindicator-gtk3 / AyatanaAppIndicator3"; fi
+    if [ ${#PIP_PKGS[@]} -gt 0 ]; then echo "   - edge-tts (via pipx)"; fi
+    
     echo ""
     echo "Instale com:"
-    echo "   sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4"
-    echo "   pipx install edge-tts"
+
+    # Detecta a distribuição
+    DISTRO="unknown"
+    if [ -f /etc/os-release ]; then
+        OS_ID=$(grep -E '^ID=' /etc/os-release | cut -d= -f2 | tr -d '"')
+        OS_LIKE=$(grep -E '^ID_LIKE=' /etc/os-release | cut -d= -f2 | tr -d '"' || echo "")
+        if [[ "$OS_ID" == "fedora" || "$OS_LIKE" =~ "fedora" ]]; then
+            DISTRO="fedora"
+        elif [[ "$OS_ID" == "ubuntu" || "$OS_ID" == "debian" || "$OS_LIKE" =~ "ubuntu" || "$OS_LIKE" =~ "debian" ]]; then
+            DISTRO="ubuntu"
+        elif [[ "$OS_ID" == "arch" || "$OS_LIKE" =~ "arch" || "$OS_ID" == "manjaro" || "$OS_LIKE" =~ "manjaro" ]]; then
+            DISTRO="arch"
+        fi
+    fi
+
+    case "$DISTRO" in
+        fedora)
+            if [ ${#FEDORA_PKGS[@]} -gt 0 ]; then
+                echo "   sudo dnf install ${FEDORA_PKGS[*]}"
+            fi
+            ;;
+        ubuntu)
+            if [ ${#UBUNTU_PKGS[@]} -gt 0 ]; then
+                echo "   sudo apt install ${UBUNTU_PKGS[*]}"
+            fi
+            ;;
+        arch)
+            if [ ${#ARCH_PKGS[@]} -gt 0 ]; then
+                echo "   sudo pacman -S ${ARCH_PKGS[*]}"
+            fi
+            ;;
+        *)
+            echo "   • Fedora: sudo dnf install ${FEDORA_PKGS[*]}"
+            echo "   • Ubuntu/Debian: sudo apt install ${UBUNTU_PKGS[*]}"
+            echo "   • Arch Linux: sudo pacman -S ${ARCH_PKGS[*]}"
+            ;;
+    esac
+
+    if [ ${#PIP_PKGS[@]} -gt 0 ]; then
+        echo "   pipx install edge-tts"
+    fi
     echo ""
     read -rp "Continuar mesmo assim? [s/N] " answer
     if [[ ! "$answer" =~ ^[sS]$ ]]; then
