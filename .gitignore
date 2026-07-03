@@ -10,3 +10,4 @@ build/
 *.mp3
 *.sock
 *.lock
+repo/
