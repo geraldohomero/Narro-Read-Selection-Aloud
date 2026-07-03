@@ -41,6 +41,7 @@ from .constants import (
 )
 from .mpv_control import kill_mpv, send_mpv_command
 from .settings import load_settings, save_settings
+from .subprocess_helper import popen_on_host
 from .tts_engine import EngineType, TTSRequest, generate_audio
 
 
@@ -113,6 +114,12 @@ class TTSIndicator:
         header = Gtk.MenuItem(label="Narro-RSA")
         header.set_sensitive(False)
         self._menu.append(header)
+
+        # Abrir Aplicativo
+        self._open_app_item = Gtk.MenuItem(label="Abrir")
+        self._open_app_item.connect("activate", self._on_open_app)
+        self._menu.append(self._open_app_item)
+
         self._menu.append(Gtk.SeparatorMenuItem())
 
         # Play / Retomar
@@ -224,11 +231,35 @@ class TTSIndicator:
         self._stop_playback()
         self._update_indicator_state()
 
+    def _on_open_app(self, _item: Gtk.MenuItem) -> None:
+        """Abre a janela principal do aplicativo."""
+        try:
+            subprocess.Popen(["flatpak", "run", "com.github.geraldohomero.NarroRsa"])
+        except OSError:
+            script_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+            main_script = os.path.join(script_dir, "main_window.py")
+            if not os.path.exists(main_script):
+                main_script = os.path.join(script_dir, "narro-rsa")
+            
+            if os.access(main_script, os.X_OK) and not main_script.endswith(".py"):
+                subprocess.Popen([main_script])
+            else:
+                subprocess.Popen([sys.executable, main_script])
+
     def _on_configuracoes(self, _item: Gtk.MenuItem) -> None:
-        """Abre o diálogo de configurações em um processo separado."""
-        script_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-        config_script = os.path.join(script_dir, "config_dialog.py")
-        subprocess.Popen([sys.executable, config_script])
+        """Abre a janela de configurações do aplicativo."""
+        try:
+            subprocess.Popen(["flatpak", "run", "com.github.geraldohomero.NarroRsa", "--settings"])
+        except OSError:
+            script_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+            main_script = os.path.join(script_dir, "main_window.py")
+            if not os.path.exists(main_script):
+                main_script = os.path.join(script_dir, "narro-rsa")
+            
+            if os.access(main_script, os.X_OK) and not main_script.endswith(".py"):
+                subprocess.Popen([main_script, "--settings"])
+            else:
+                subprocess.Popen([sys.executable, main_script, "--settings"])
 
     def _on_quit(self, _item: Gtk.MenuItem) -> None:
         """Encerra o aplicativo."""
@@ -261,6 +292,13 @@ class TTSIndicator:
         if not text:
             self._set_status("Nenhum texto encontrado")
             return
+
+        try:
+            from narro_rsa.constants import LAST_READ_FILE
+            with open(LAST_READ_FILE, "w", encoding="utf-8") as fh:
+                fh.write(text)
+        except OSError:
+            pass
 
         # Recarrega configurações mais recentes (podem ter sido alteradas
         # pelo diálogo de configurações GTK4)
@@ -369,7 +407,7 @@ class TTSIndicator:
             except OSError:
                 pass
 
-            self._mpv_process = subprocess.Popen(
+            self._mpv_process = popen_on_host(
                 [
                     "mpv",
                     "--no-video",

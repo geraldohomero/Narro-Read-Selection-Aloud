@@ -17,13 +17,19 @@ PIPER_BIN: str = os.path.expanduser("~/.local/bin/piper")
 # ---------------------------------------------------------------------------
 # Caminhos de runtime (preferência por XDG_RUNTIME_DIR com fallback /tmp)
 # ---------------------------------------------------------------------------
-_RUNTIME_DIR: str = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+_BASE_RUNTIME_DIR: str = os.environ.get("XDG_RUNTIME_DIR", "/tmp")
+_RUNTIME_DIR: str = os.path.join(_BASE_RUNTIME_DIR, "narro-rsa")
+try:
+    os.makedirs(_RUNTIME_DIR, exist_ok=True)
+except OSError:
+    _RUNTIME_DIR = _BASE_RUNTIME_DIR
 
 LOCKFILE: str = os.path.join(_RUNTIME_DIR, "narro-rsa.lock")
 MPV_SOCKET: str = os.path.join(_RUNTIME_DIR, "narro-rsa-mpv.sock")
 TMP_AUDIO_MP3: str = os.path.join(_RUNTIME_DIR, "narro-rsa.mp3")
 TMP_AUDIO_WAV: str = os.path.join(_RUNTIME_DIR, "narro-rsa.wav")
 TMP_TEXT_FILE: str = os.path.join(_RUNTIME_DIR, "narro-rsa-text.txt")
+LAST_READ_FILE: str = os.path.join(_RUNTIME_DIR, "narro-rsa-last-text.txt")
 
 # ---------------------------------------------------------------------------
 # Caminhos de configuração persistente

@@ -1,140 +1,127 @@
 # Narro - Ler seleção em voz alta
 
+<p align="center">
+  <img src="assets/com.github.geraldohomero.NarroRsa.png" alt="Narro-RSA Logo" width="128" height="128">
+</p>
+
 [English](README.md) | [Português (Brasil)](README.pt-br.md) | [简体中文](README.zh-cn.md)
 
-Leitor de texto em voz alta com suporte a Edge TTS (online) e Piper TTS (offline) para o GNOME/Wayland.
+Leitor de texto em voz alta com suporte a Edge TTS (online) e Piper TTS (offline) para o GNOME/Wayland, apresentando uma aplicação GTK4 nativa totalmente integrada e suporte para empacotamento Flatpak.
 
-Selecione texto em qualquer aplicativo, copie com Ctrl+C, e use um atalho de teclado para abrir o player TTS — com controles de Play/Pause/Stop, seleção de motor/idioma/voz e controle de velocidade.
-
-![Player TTS](https://img.shields.io/badge/GTK3-Player-blue?style=for-the-badge)
+Selecione texto em qualquer aplicativo, copie com Ctrl+C, e use um atalho de teclado para abrir o player TTS — com controles de Play/Pause/Stop, seleção de motor/idioma/voz, controle de velocidade e visualizador de histórico de leitura.
 
 ![image-hero](assets/image-hero.png)
 
 ## Funcionalidades
 
-- Controles completos de reprodução (Play, Pause, Stop).
-- Dois motores de síntese suportados: Edge TTS (vozes neurais da nuvem) e Piper TTS (vozes locais ultrarrápidas rodando totalmente offline).
-- Nova aba de seleção de voz estruturada em: Voz -> Engine (Edge TTS ou Piper TTS) -> Língua -> Selecionar.
-- Diálogo de configuração nativo em GTK4 que permite listar as vozes disponíveis, visualizar o status de download do modelo local (para o Piper) e baixá-los diretamente pela interface com uma barra de progresso em tempo real.
-- As vozes baixadas do Piper são guardadas em uma pasta local do usuário (`~/.config/narro-rsa/piper-voices/`).
-- Controle de velocidade em tempo real via mpv (aplicável a ambos os motores).
-- Interface GTK nativa integrada visualmente com o GNOME.
-- Barra de status com informações de feedback do processo.
+- **Janela GTK4 Nativa Integrada**: Visualize, edite e leia o texto do clipboard diretamente de uma linda interface integrada ao visual do GNOME.
+- **Ícone de Desktop Sóbrio**: Ícone personalizado transparente em formato de folha de papel compatível com as diretrizes do GNOME/Flatpak.
+- **Dois Motores de Síntese**: Edge TTS (vozes neurais da nuvem) e Piper TTS (vozes locais ultrarrápidas rodando totalmente offline).
+- **Atalhos de Teclado Auto-configurados**: Configura automaticamente as teclas de atalho globais no primeiro início da interface gráfica.
+- **Diálogo de Configurações Dinâmico**: Permite gerenciar as vozes disponíveis, monitorar o download de modelos locais (Piper) com barra de progresso em tempo real e alterar o motor de reprodução.
+- **Controle de Velocidade em Tempo Real**: Altere a velocidade da fala dinamicamente via mpv.
+- **Indicador de Bandeja do Sistema**: Um indicador na bandeja (AppIndicator) opcional rodando no host que permite controlar e abrir a aplicação rapidamente.
 
-## Dependências
+---
 
-Escolha o comando correspondente à sua distribuição Linux para instalar as dependências do sistema:
+## Opções de Instalação
 
-### Fedora
+### Opção 1: Flatpak (Recomendado e Autossuficiente)
+
+A instalação via Flatpak é a mais simples. Ela empacota todas as dependências em uma sandbox, não requer configuração manual no host e configura os atalhos de teclado no GNOME automaticamente.
+
+#### 1. Compile e instale o pacote Flatpak localmente:
 ```bash
-sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3
+flatpak-builder --user --install --force-clean --disable-rofiles-fuse build-dir com.github.geraldohomero.NarroRsa.yaml
 ```
 
-### Ubuntu / Debian
+#### 2. Execute a aplicação:
 ```bash
-sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1
+flatpak run com.github.geraldohomero.NarroRsa
 ```
 
-### Arch Linux / Manjaro
-```bash
-sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator
-```
+*(No primeiro início da interface, os atalhos de teclado personalizados no GNOME serão criados automaticamente direcionados para o Flatpak!)*
 
-### Motores de Síntese de Voz Python (Todas as distros)
+---
+
+### Opção 2: Instalação Tradicional (Script no Host)
+
+Se preferir rodar a aplicação diretamente no host usando o interpretador Python do seu sistema:
+
+#### 1. Instale as Dependências do Sistema:
+- **Fedora**: `sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3`
+- **Ubuntu/Debian**: `sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1`
+- **Arch Linux**: `sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator`
+
+#### 2. Instale os Motores TTS em Python:
 ```bash
 pipx install edge-tts
-# Opcional para TTS local offline:
-pipx install piper-tts
+pipx install piper-tts  # Opcional para TTS local offline
 ```
 
-Nota: Para usar o Piper TTS, garanta que o binário do `piper` esteja disponível no seu PATH de execução ou instalado diretamente em `~/.local/bin/piper`.
-
-## Instalação
-
+#### 3. Execute o instalador:
 ```bash
 git clone https://github.com/geraldohomero/narro-rsa.git
 cd narro-rsa
 bash install.sh
 ```
 
-O script `install.sh` copia os arquivos necessários para `~/.local/bin/` (incluindo o pacote `narro_rsa/`) e verifica as dependências.
+---
+
+## Atalhos de Teclado no GNOME
+
+O aplicativo gerencia a criação desses atalhos de forma automática no GNOME. Os comandos executados variam dependendo da instalação:
+
+### Para Instalação Flatpak:
+- **Ler área de transferência** (`Super+Alt+L`): `flatpak run com.github.geraldohomero.NarroRsa --play`
+- **Ler seleção direta** (`Ctrl+\`): `flatpak run com.github.geraldohomero.NarroRsa --primary`
+- **Pausar/Retomar** (`Super+Alt+J`): `flatpak run com.github.geraldohomero.NarroRsa --pause`
+- **Parar reprodução** (`Super+Alt+K`): `flatpak run com.github.geraldohomero.NarroRsa --stop`
+
+### Para Instalação Tradicional:
+- **Ler área de transferência** (`Super+Alt+L`): `bash -c "$HOME/.local/bin/ler_texto.sh"`
+- **Ler seleção direta** (`Ctrl+\`): `bash -c "$HOME/.local/bin/ler_texto.sh --primary"`
+- **Pausar/Retomar** (`Super+Alt+J`): `bash -c "$HOME/.local/bin/pausar_leitura.sh"`
+- **Parar reprodução** (`Super+Alt+K`): `bash -c "$HOME/.local/bin/parar_leitura.sh"`
+
+---
 
 ## Desinstalação
 
-Para remover completamente o Narro-RSA do sistema:
+### Para remover a aplicação Flatpak:
+```bash
+flatpak remove com.github.geraldohomero.NarroRsa
+```
 
+### Para remover os scripts locais:
 ```bash
 bash uninstall.sh
 ```
 
-O script remove:
-- Scripts e pacote instalados em `~/.local/bin/`
-- Configurações salvas e vozes locais do Piper em `~/.config/narro-rsa/`
-- Arquivos temporários em `$XDG_RUNTIME_DIR` (e `/tmp/` para instalações antigas)
-- Processos em andamento (mpv, edge-tts, piper)
-
-Após desinstalar, lembre-se de remover manualmente os atalhos de teclado configurados no GNOME.
-
-## Configuração dos atalhos no GNOME
-
-> [!NOTE]
-> Os scripts `install.sh` e `uninstall.sh` agora configuram e removem esses atalhos **automaticamente** caso você utilize o ambiente GNOME.
-
-Se precisar configurá-los ou ajustá-los manualmente, abra: Configurações -> Teclado -> Atalhos de teclado -> Atalhos personalizados:
-
-### Atalho 1 — Abrir Leitor TTS
-- Nome: `Leitor TTS (Narro)`
-- Comando: `bash -c "$HOME/.local/bin/ler_texto.sh"`
-- Atalho: `Super+Alt+L`
-
-### Atalho 2 — Abrir Leitor TTS (direto)
-- Nome: `Leitor TTS (Narro) [Ctrl+\]`
-- Comando: `bash -c "$HOME/.local/bin/ler_texto.sh"`
-- Atalho: `Ctrl+\` (Captura a seleção de texto ativa automaticamente sem a necessidade de Ctrl+C)
-
-### Atalho 3 — Pausar/Retomar leitura (opcional)
-- Nome: `Pausar leitura TTS (Narro)`
-- Comando: `bash -c "$HOME/.local/bin/pausar_leitura.sh"`
-- Atalho: `Super+Alt+J`
-
-### Atalho 4 — Parar leitura (opcional)
-- Nome: `Parar leitura TTS (Narro)`
-- Comando: `bash -c "$HOME/.local/bin/parar_leitura.sh"`
-- Atalho: `Super+Alt+K`
-
-## Como usar
-
-1. Abra um documento ou PDF (por exemplo, no Okular).
-2. Selecione o texto desejado com a ferramenta de seleção.
-3. Copie com Ctrl+C.
-4. Pressione Super+Alt+L (ou o atalho configurado).
-5. O player abrirá na tray do sistema.
-6. Vá em Configurações para escolher o motor (Edge TTS ou Piper TTS), idioma e voz.
-7. No diálogo que se abrirá, escolha a voz desejada. Caso esteja configurando o Piper, clique em "Baixar voz selecionada" antes de confirmar a seleção.
-8. Clique em Play para iniciar a leitura.
-9. Use Pause para pausar/retomar e Stop para parar.
+---
 
 ## Estrutura do Projeto
 
 ```
 narro-read-selection-aloud/
-├── ler_texto.py           # Entrypoint — single-instance lock, signals, GTK main loop
-├── config_dialog.py       # Diálogo de configurações GTK4 (processo separado)
-├── narro_rsa/             # Pacote Python com a lógica do projeto
-│   ├── __init__.py
+├── main_window.py         # Entrypoint e Janela Principal GTK4 (com Gtk.Stack e menu Hambúrguer)
+├── ler_texto.py           # Daemon do AppIndicator3 de bandeja (GTK3)
+├── narro_rsa/             # Pacote Python com lógica do projeto
+│   ├── translations.py    # Dicionário de traduções centralizado
+│   ├── reader_page.py     # Componente da interface do Leitor (GTK4)
+│   ├── settings_page.py   # Componente da interface de Configurações (GTK4)
 │   ├── constants.py       # Constantes e caminhos centralizados
-│   ├── settings.py        # Carrega/salva preferências JSON
-│   ├── mpv_control.py     # Comunicação IPC com mpv via socket Unix
-│   ├── text_formatter.py  # Formatação de texto para TTS (limpeza de PDFs)
-│   ├── clipboard.py       # Captura de texto do clipboard (Wayland)
-│   ├── tts_engine.py      # Motor TTS (Edge-TTS + Piper)
-│   └── indicator.py       # AppIndicator3 na tray do GNOME
-├── ler_texto.sh           # Wrapper shell para atalho do GNOME
-├── parar_leitura.sh       # Script para interromper a leitura
-├── install.sh             # Instalador do sistema
-├── uninstall.sh           # Desinstalador
-├── assets/                # Imagens e recursos visuais
-└── README.md              # Documentação do projeto
+│   ├── settings.py        # Carregador de preferências
+│   ├── mpv_control.py     # Controles via socket IPC Unix para o mpv
+│   ├── text_formatter.py  # Limpeza de texto para leituras de PDFs
+│   ├── clipboard.py       # Captura de clipboard do Wayland
+│   ├── subprocess_helper.py # Utilitários de subprocessos e daemon
+│   └── tts_engine.py      # Gerador de áudio (Edge-TTS + Piper)
+├── com.github.geraldohomero.NarroRsa.yaml         # Manifesto Flatpak
+├── com.github.geraldohomero.NarroRsa.desktop      # Entrada de atalho desktop
+├── com.github.geraldohomero.NarroRsa.metainfo.xml # Metadados AppStream
+├── install.sh             # Script de instalação do host
+└── assets/                # Ícone e recursos visuais
 ```
 
 ## Licença

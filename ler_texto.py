@@ -78,8 +78,25 @@ def _acquire_single_instance(text: str) -> bool:
 
 def main() -> None:
     """Ponto de entrada principal do Narro-RSA."""
-    use_primary = "--primary" in sys.argv
-    text = get_clipboard_text(primary=use_primary)
+    if "--pause" in sys.argv:
+        if os.path.exists(LOCKFILE):
+            try:
+                with open(LOCKFILE, "r", encoding="utf-8") as fh:
+                    pid = int(fh.read().strip())
+                os.kill(pid, signal.SIGUSR2)
+            except (ValueError, OSError, ProcessLookupError):
+                pass
+        sys.exit(0)
+
+    if "--stop" in sys.argv:
+        kill_mpv()
+        sys.exit(0)
+
+    if "--daemon" in sys.argv or "--silent" in sys.argv:
+        text = ""
+    else:
+        use_primary = "--primary" in sys.argv
+        text = get_clipboard_text(primary=use_primary)
 
     _acquire_single_instance(text)
 

@@ -1,140 +1,127 @@
 # Narro - Read Selection Aloud
 
+<p align="center">
+  <img src="assets/com.github.geraldohomero.NarroRsa.png" alt="Narro-RSA Logo" width="128" height="128">
+</p>
+
 [English](README.md) | [Português (Brasil)](README.pt-br.md) | [简体中文](README.zh-cn.md)
 
-Text-to-speech (TTS) reader with support for Edge TTS (online) and Piper TTS (offline) for GNOME/Wayland.
+Text-to-speech (TTS) reader with support for Edge TTS (online) and Piper TTS (offline) for GNOME/Wayland, featuring a fully integrated GTK4 native application and Flatpak support.
 
-Select text in any application, copy it with Ctrl+C, and use a keyboard shortcut to open the TTS player — featuring Play/Pause/Stop controls, engine/language/voice selection, and speed control.
-
-![TTS Player](https://img.shields.io/badge/GTK3-Player-blue?style=for-the-badge)
+Select text in any application, copy it, and use a keyboard shortcut to open the TTS player — featuring Play/Pause/Stop controls, engine/language/voice selection, speed control, and a visual history viewer.
 
 ![image-hero](assets/image-hero.png)
 
 ## Features
 
-- Full playback controls (Play, Pause, Stop).
-- Two supported text-to-speech engines: Edge TTS (cloud neural voices) and Piper TTS (ultra-fast local voices running completely offline).
-- New voice selection tab structured as: Voice -> Engine (Edge TTS or Piper TTS) -> Language -> Select.
-- Native GTK4 configuration dialog that lists available voices, displays the download status of local models (for Piper), and lets you download them directly within the UI with a real-time progress bar.
-- Downloaded Piper voices are stored in the user's local config folder (`~/.config/narro-rsa/piper-voices/`).
-- Real-time speed control via mpv (applicable to both engines).
-- Native GTK interface visually integrated with GNOME.
-- Status bar providing process feedback.
+- **Integrated GTK4 Native Window**: View, edit and read clipboard text directly from a beautiful GNOME HIG interface.
+- **Sober Desktop Icon**: Custom transparent document icon matching GNOME/Flatpak desktop environments.
+- **Two TTS Engines**: Edge TTS (neural cloud voices) and Piper TTS (ultra-fast local voices running completely offline).
+- **Auto-Configured Keyboard Shortcuts**: Automatically sets up GNOME global hotkeys on the first launch.
+- **Dynamic Settings Dialog**: Inside the main window, view voice catalogs, download local models for Piper with real-time progress bars, and set preferences.
+- **Real-Time Speed Control**: Adjust playback speed on the fly via mpv integration.
+- **System Tray Integration**: An optional system tray indicator (AppIndicator) running on the host that lets you trigger/open the app quickly.
 
-## Dependencies
+---
 
-Choose the command for your Linux distribution to install system dependencies:
+## Installation Options
 
-### Fedora
+### Option 1: Flatpak (Recommended & Fully Self-Contained)
+
+Installing via Flatpak is the easiest method. It bundles all dependencies inside a sandbox, requires no manual configuration of libraries on your host system, and sets up GNOME keyboard shortcuts automatically.
+
+#### 1. Build and install the Flatpak package locally:
 ```bash
-sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3
+flatpak-builder --user --install --force-clean --disable-rofiles-fuse build-dir com.github.geraldohomero.NarroRsa.yaml
 ```
 
-### Ubuntu / Debian
+#### 2. Run the application:
 ```bash
-sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1
+flatpak run com.github.geraldohomero.NarroRsa
 ```
 
-### Arch Linux / Manjaro
-```bash
-sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator
-```
+*(On the first GUI startup, GNOME custom keyboard shortcuts will be configured automatically to use Flatpak!)*
 
-### Python TTS Engines (All Distros)
+---
+
+### Option 2: Traditional Installation (Host Script)
+
+If you prefer to run the application directly on the host using your system Python interpreter:
+
+#### 1. Install System Dependencies:
+- **Fedora**: `sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3`
+- **Ubuntu/Debian**: `sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1`
+- **Arch Linux**: `sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator`
+
+#### 2. Install Python TTS Engines:
 ```bash
 pipx install edge-tts
-# Optional for local offline TTS:
-pipx install piper-tts
+pipx install piper-tts  # Optional for offline local TTS
 ```
 
-Note: To use Piper TTS, ensure that the `piper` binary is available in your execution PATH or installed directly in `~/.local/bin/piper`.
-
-## Installation
-
+#### 3. Run the installer:
 ```bash
 git clone https://github.com/geraldohomero/narro-rsa.git
 cd narro-rsa
 bash install.sh
 ```
 
-The `install.sh` script copies the required files to `~/.local/bin/` (including the `narro_rsa/` package) and checks dependencies.
+---
+
+## GNOME Keyboard Shortcuts
+
+The app configures these shortcuts automatically on GNOME. The corresponding commands differ depending on your installation:
+
+### For Flatpak Installation:
+- **Read Clipboard** (`Super+Alt+L`): `flatpak run com.github.geraldohomero.NarroRsa --play`
+- **Read Selection Direct** (`Ctrl+\`): `flatpak run com.github.geraldohomero.NarroRsa --primary`
+- **Pause/Resume** (`Super+Alt+J`): `flatpak run com.github.geraldohomero.NarroRsa --pause`
+- **Stop Playback** (`Super+Alt+K`): `flatpak run com.github.geraldohomero.NarroRsa --stop`
+
+### For Traditional Installation:
+- **Read Clipboard** (`Super+Alt+L`): `bash -c "$HOME/.local/bin/ler_texto.sh"`
+- **Read Selection Direct** (`Ctrl+\`): `bash -c "$HOME/.local/bin/ler_texto.sh --primary"`
+- **Pause/Resume** (`Super+Alt+J`): `bash -c "$HOME/.local/bin/pausar_leitura.sh"`
+- **Stop Playback** (`Super+Alt+K`): `bash -c "$HOME/.local/bin/parar_leitura.sh"`
+
+---
 
 ## Uninstallation
 
-To completely remove Narro-RSA from your system:
+### To uninstall the Flatpak app:
+```bash
+flatpak remove com.github.geraldohomero.NarroRsa
+```
 
+### To uninstall host scripts:
 ```bash
 bash uninstall.sh
 ```
 
-The script removes:
-- Installed scripts and packages in `~/.local/bin/`
-- Saved settings and local Piper voices in `~/.config/narro-rsa/`
-- Temporary files in `$XDG_RUNTIME_DIR` (and `/tmp/` for older installations)
-- Running processes (mpv, edge-tts, piper)
-
-After uninstalling, remember to manually remove the configured keyboard shortcuts in GNOME.
-
-## GNOME Keyboard Shortcuts Configuration
-
-> [!NOTE]
-> The `install.sh` and `uninstall.sh` scripts now configure and remove these shortcuts **automatically** if you are running GNOME.
-
-If you need to configure or adjust them manually, open: Settings -> Keyboard -> Keyboard Shortcuts -> Custom Shortcuts:
-
-### Shortcut 1 — Open TTS Reader
-- Name: `Leitor TTS (Narro)`
-- Command: `bash -c "$HOME/.local/bin/ler_texto.sh"`
-- Shortcut: `Super+Alt+L`
-
-### Shortcut 2 — Open TTS Reader (direct)
-- Name: `Leitor TTS (Narro) [Ctrl+\]`
-- Command: `bash -c "$HOME/.local/bin/ler_texto.sh"`
-- Shortcut: `Ctrl+\` (Automatically captures the active text selection without needing Ctrl+C)
-
-### Shortcut 3 — Pause/Resume TTS reading (optional)
-- Name: `Pausar leitura TTS (Narro)`
-- Command: `bash -c "$HOME/.local/bin/pausar_leitura.sh"`
-- Shortcut: `Super+Alt+J`
-
-### Shortcut 4 — Stop TTS reading (optional)
-- Name: `Parar leitura TTS (Narro)`
-- Command: `bash -c "$HOME/.local/bin/parar_leitura.sh"`
-- Shortcut: `Super+Alt+K`
-
-## How to Use
-
-1. Open a document or PDF (for example, in Okular).
-2. Select the desired text using the selection tool.
-3. Copy it with Ctrl+C.
-4. Press Super+Alt+L (or your configured shortcut).
-5. The player will open in the system tray.
-6. Go to Settings to choose the engine (Edge TTS or Piper TTS), language, and voice.
-7. In the dialog that opens, select your preferred voice. If configuring Piper, click "Download selected voice" before confirming the selection.
-8. Click Play to start reading.
-9. Use Pause to pause/resume and Stop to stop.
+---
 
 ## Project Structure
 
 ```
 narro-read-selection-aloud/
-├── ler_texto.py           # Entrypoint — single-instance lock, signals, GTK main loop
-├── config_dialog.py       # GTK4 configuration dialog (separate process)
+├── main_window.py         # Entrypoint & GTK4 Main Window (with Gtk.Stack and Hamburger menu)
+├── ler_texto.py           # AppIndicator3 tray daemon launcher (GTK3)
 ├── narro_rsa/             # Python package with project logic
-│   ├── __init__.py
+│   ├── translations.py    # Centralized translations & formatting helper
+│   ├── reader_page.py     # Reader UI GTK4 component
+│   ├── settings_page.py   # Settings UI GTK4 component
 │   ├── constants.py       # Centralized paths and constants
-│   ├── settings.py        # Load/save JSON preferences
-│   ├── mpv_control.py     # IPC communication with mpv via Unix socket
-│   ├── text_formatter.py  # Text formatting for TTS (cleaning PDFs)
-│   ├── clipboard.py       # Clipboard text capture (Wayland)
-│   ├── tts_engine.py      # TTS Engine (Edge-TTS + Piper)
-│   └── indicator.py       # AppIndicator3 in the GNOME tray
-├── ler_texto.sh           # Shell wrapper for GNOME shortcut
-├── parar_leitura.sh       # Script to stop reading
-├── install.sh             # System installer
-├── uninstall.sh           # Uninstaller
-├── assets/                # Images and visual assets
-└── README.md              # Project documentation
+│   ├── settings.py        # Preferences loader
+│   ├── mpv_control.py     # IPC Unix socket controls for mpv
+│   ├── text_formatter.py  # Text cleanup for PDF reading
+│   ├── clipboard.py       # Wayland clipboard capture
+│   ├── subprocess_helper.py # Daemon and process utilities
+│   └── tts_engine.py      # Audio generator (Edge-TTS + Piper)
+├── com.github.geraldohomero.NarroRsa.yaml         # Flatpak Manifest
+├── com.github.geraldohomero.NarroRsa.desktop      # Desktop entry
+├── com.github.geraldohomero.NarroRsa.metainfo.xml # AppStream Metadata
+├── install.sh             # Host installer script
+└── assets/                # Icon and visual resources
 ```
 
 ## License

@@ -1,140 +1,127 @@
 # Narro - 朗读选中文本 (Read Selection Aloud)
 
+<p align="center">
+  <img src="assets/com.github.geraldohomero.NarroRsa.png" alt="Narro-RSA Logo" width="128" height="128">
+</p>
+
 [English](README.md) | [Português (Brasil)](README.pt-br.md) | [简体中文](README.zh-cn.md)
 
-适用于 GNOME/Wayland 的文本转语音 (TTS) 朗读工具，支持 Edge TTS (在线) 和 Piper TTS (离线)。
+适用于 GNOME/Wayland 的文本转语音 (TTS) 朗读工具，支持 Edge TTS (在线) 和 Piper TTS (离线)。现已全面支持原生 GTK4 窗口应用整合及 Flatpak 打包支持。
 
-在任何应用程序中选择文本，使用 Ctrl+C 复制，然后使用键盘快捷键打开 TTS 播放器 —— 包含播放/暂停/停止控制、引擎/语言/声音选择以及语速控制。
-
-![TTS Player](https://img.shields.io/badge/GTK3-Player-blue?style=for-the-badge)
+在任何应用程序中选择文本，使用 Ctrl+C 复制，然后使用键盘快捷键打开 TTS 播放器 —— 包含播放/暂停/停止控制、引擎/语言/声音选择、语速控制以及历史文本查看器。
 
 ![image-hero](assets/image-hero.png)
 
 ## 功能特性
 
-- 完整的播放控制（播放、暂停、停止）。
-- 支持两种语音合成引擎：Edge TTS (云端神经网络语音) 和 Piper TTS (运行于本地且完全离线的极速语音)。
-- 全新的语音选择标签页，结构为：声音 -> 引擎 (Edge TTS 或 Piper TTS) -> 语言 -> 选择。
-- 原生 GTK4 配置对话框，可以列出可用声音，显示本地模型（Piper）的下载状态，并允许直接在界面中下载模型（带实时进度条）。
-- 已下载的 Piper 声音保存在用户本地配置文件夹中 (`~/.config/narro-rsa/piper-voices/`)。
-- 通过 mpv 进行实时语速控制（适用于两种引擎）。
-- 原生 GTK 界面，与 GNOME 视觉深度集成。
-- 状态栏提供进程反馈信息。
+- **集成式 GTK4 原生窗口**：直接在精美的 GNOME HIG 界面中查看、编辑并朗读剪贴板文本。
+- **端庄的桌面图标**：符合 GNOME/Flatpak 桌面规范的自定义透明文档图标。
+- **双语音合成引擎**：支持 Edge TTS (云端神经网络语音) 和 Piper TTS (运行于本地且完全离线的极速语音)。
+- **自动配置键盘快捷键**：在首次启动图形界面时，自动为您在 GNOME 中注册全局快捷键。
+- **动态配置对话框**：直接在主窗口中管理可用声音、展示 Piper 本地语音下载进度（带实时进度条），并设置偏好。
+- **实时语速控制**：通过集成 mpv 播放器实时动态调整语音播放速度。
+- **系统托盘集成**：可选的运行于宿主机的系统托盘指示器 (AppIndicator)，以便快速调出或控制应用。
 
-## 依赖项
+---
 
-根据您使用的 Linux 发行版选择相应的命令来安装系统依赖项：
+## 安装方式
 
-### Fedora
+### 方案 1：Flatpak 安装（推荐，完全独立）
+
+使用 Flatpak 是最简便的安装方法。它将所有依赖项隔离打包在沙盒中，不需要在宿主机手动配置各种底层库，并在首次启动时自动写入 GNOME 键盘快捷键。
+
+#### 1. 在本地编译并安装 Flatpak 包：
 ```bash
-sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3
+flatpak-builder --user --install --force-clean --disable-rofiles-fuse build-dir com.github.geraldohomero.NarroRsa.yaml
 ```
 
-### Ubuntu / Debian
+#### 2. 运行应用：
 ```bash
-sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1
+flatpak run com.github.geraldohomero.NarroRsa
 ```
 
-### Arch Linux / Manjaro
-```bash
-sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator
-```
+*(在首次启动图形界面时，GNOME 自定义快捷键将自动创建并指向 Flatpak 命令！)*
 
-### Python 语音合成引擎（所有发行版）
+---
+
+### 方案 2：传统安装（宿主机脚本）
+
+如果您更倾向于直接使用系统的 Python 解释器在宿主机运行：
+
+#### 1. 安装系统依赖项：
+- **Fedora**: `sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3`
+- **Ubuntu/Debian**: `sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1`
+- **Arch Linux**: `sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator`
+
+#### 2. 安装 Python TTS 发音引擎：
 ```bash
 pipx install edge-tts
-# 可选本地离线 TTS：
-pipx install piper-tts
+pipx install piper-tts  # 可选的离线本地 TTS 发音引擎
 ```
 
-注意：若要使用 Piper TTS，请确保 `piper` 可执行文件在您的运行 PATH 中，或者直接安装在 `~/.local/bin/piper`。
-
-## 安装步骤
-
+#### 3. 运行安装程序：
 ```bash
 git clone https://github.com/geraldohomero/narro-rsa.git
 cd narro-rsa
 bash install.sh
 ```
 
-`install.sh` 脚本会将所需的文件复制到 `~/.local/bin/`（包括 `narro_rsa/` 包）并检查依赖项。
+---
+
+## GNOME 快捷键
+
+应用会自动为您在 GNOME 中配置对应的快捷键，执行的命令由于安装方式的不同而有所区别：
+
+### 针对 Flatpak 安装：
+- **朗读剪贴板** (`Super+Alt+L`): `flatpak run com.github.geraldohomero.NarroRsa --play`
+- **直接朗读选中文本** (`Ctrl+\`): `flatpak run com.github.geraldohomero.NarroRsa --primary`
+- **暂停/恢复播放** (`Super+Alt+J`): `flatpak run com.github.geraldohomero.NarroRsa --pause`
+- **停止播放** (`Super+Alt+K`): `flatpak run com.github.geraldohomero.NarroRsa --stop`
+
+### 针对传统安装：
+- **朗读剪贴板** (`Super+Alt+L`): `bash -c "$HOME/.local/bin/ler_texto.sh"`
+- **直接朗读选中文本** (`Ctrl+\`): `bash -c "$HOME/.local/bin/ler_texto.sh --primary"`
+- **暂停/恢复播放** (`Super+Alt+J`): `bash -c "$HOME/.local/bin/pausar_leitura.sh"`
+- **停止播放** (`Super+Alt+K`): `bash -c "$HOME/.local/bin/parar_leitura.sh"`
+
+---
 
 ## 卸载步骤
 
-要从系统中完全删除 Narro-RSA：
+### 卸载 Flatpak 应用：
+```bash
+flatpak remove com.github.geraldohomero.NarroRsa
+```
 
+### 卸载宿主机本地脚本：
 ```bash
 bash uninstall.sh
 ```
 
-该脚本将删除：
-- 安装在 `~/.local/bin/` 中的脚本和包
-- 保存在 `~/.config/narro-rsa/` 中的设置和本地 Piper 语音
-- `$XDG_RUNTIME_DIR`（以及旧版本安装的 `/tmp/`）中的临时文件
-- 正在运行的进程 (mpv, edge-tts, piper)
-
-卸载后，请记得手动删除在 GNOME 中配置的键盘快捷键。
-
-## GNOME 快捷键配置
-
-> [!NOTE]
-> 如果您使用的是 GNOME 环境，`install.sh` 和 `uninstall.sh` 脚本现在将**自动**配置和删除这些快捷键。
-
-如果您需要手动配置或调整它们，请打开：设置 -> 键盘 -> 键盘快捷键 -> 自定义快捷键：
-
-### 快捷键 1 —— 打开 TTS 朗读器
-- 名称: `Leitor TTS (Narro)`
-- 命令: `bash -c "$HOME/.local/bin/ler_texto.sh"`
-- 快捷键: `Super+Alt+L`
-
-### 快捷键 2 —— 直接打开 TTS 朗读器 (自动复制并朗读)
-- 名称: `Leitor TTS (Narro) [Ctrl+\]`
-- 命令: `bash -c "$HOME/.local/bin/ler_texto.sh"`
-- 快捷键: `Ctrl+\` (自动捕获当前选中的文本并开始朗读，无需先按 Ctrl+C 复制)
-
-### 快捷键 3 —— 暂停/恢复 TTS 朗读 (可选)
-- 名称: `Pausar leitura TTS (Narro)`
-- 命令: `bash -c "$HOME/.local/bin/pausar_leitura.sh"`
-- 快捷键: `Super+Alt+J`
-
-### 快捷键 4 —— 停止 TTS 朗读 (可选)
-- 名称: `Parar leitura TTS (Narro)`
-- 命令: `bash -c "$HOME/.local/bin/parar_leitura.sh"`
-- 快捷键: `Super+Alt+K`
-
-## 使用方法
-
-1. 打开一个文档或 PDF（例如在 Okular 中）。
-2. 使用选择工具选中所需的文本。
-3. 使用 Ctrl+C 复制。
-4. 按下 Super+Alt+L（或您配置的快捷键）。
-5. 播放器将在系统托盘中打开。
-6. 进入“设置”选择引擎（Edge TTS 或 Piper TTS）、语言和声音。
-7. 在打开的对话框中选择您喜欢的声音。如果配置的是 Piper，请在确认选择之前点击“下载所选声音”。
-8. 点击“播放”开始朗读。
-9. 使用“暂停”进行暂停/恢复，使用“停止”结束朗读。
+---
 
 ## 项目结构
 
 ```
 narro-read-selection-aloud/
-├── ler_texto.py           # 入口点 —— 单例锁、信号、GTK 主循环
-├── config_dialog.py       # GTK4 配置对话框（独立进程）
-├── narro_rsa/             # 包含项目逻辑的 Python 包
-│   ├── __init__.py
-│   ├── constants.py       # 集中管理常量和路径
-│   ├── settings.py        # 加载/保存 JSON 偏好设置
-│   ├── mpv_control.py     # 通过 Unix 套接字与 mpv 进行 IPC 通信
-│   ├── text_formatter.py  # 用于 TTS 的文本格式化（清理 PDF 文本）
-│   ├── clipboard.py       # 剪贴板文本捕获 (Wayland)
-│   ├── tts_engine.py      # TTS 引擎 (Edge-TTS + Piper)
-│   └── indicator.py       # GNOME 托盘中的 AppIndicator3
-├── ler_texto.sh           # GNOME 快捷键的 Shell 包装器
-├── parar_leitura.sh       # 停止朗读的脚本
-├── install.sh             # 系统安装脚本
-├── uninstall.sh           # 卸载脚本
-├── assets/                # 图像和视觉资源
-└── README.md              # 项目文档
+├── main_window.py         # 入口点及 GTK4 主窗口 (带有 Gtk.Stack 与汉堡包导航菜单)
+├── ler_texto.py           # AppIndicator3 托盘守护进程 (GTK3)
+├── narro_rsa/             # 包含核心业务逻辑的 Python 包
+│   ├── translations.py    # 集中式多语言翻译与格式化辅助模块
+│   ├── reader_page.py     # 朗读播放器界面 GTK4 组件
+│   ├── settings_page.py   # 配置设置界面 GTK4 组件
+│   ├── constants.py       # 集中管理路径和常量
+│   ├── settings.py        # 加载/保存 JSON 首选项
+│   ├── mpv_control.py     # 通过 Unix 域套接字与 mpv 进行 IPC 通信
+│   ├── text_formatter.py  # 朗读文本前置格式化（净化PDF噪声）
+│   ├── clipboard.py       # Wayland 剪贴板文本捕获
+│   ├── subprocess_helper.py # 子进程与守护进程辅助工具
+│   └── tts_engine.py      # 音频生成引擎 (Edge-TTS + Piper)
+├── com.github.geraldohomero.NarroRsa.yaml         # Flatpak 清单
+├── com.github.geraldohomero.NarroRsa.desktop      # 桌面快捷方式条目
+├── com.github.geraldohomero.NarroRsa.metainfo.xml # AppStream 元数据
+├── install.sh             # 宿主机安装脚本
+└── assets/                # 图标及其他视觉资源
 ```
 
 ## 许可证

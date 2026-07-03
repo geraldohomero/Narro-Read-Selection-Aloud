@@ -74,6 +74,15 @@ def format_text_for_tts(text: str) -> str:
     text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
     text = re.sub(r'[\u200b-\u200f\u2028-\u202f\u2060\ufeff\u00ad]', '', text)
 
+    # 1.5 Remove linhas contendo apenas números (ex: número de página isolado no PDF)
+    lines = text.splitlines()
+    filtered_lines = []
+    for line in lines:
+        if line.strip().isdigit():
+            continue
+        filtered_lines.append(line)
+    text = "\n".join(filtered_lines)
+
     # 2. Corrige hifenização
     text = re.sub(r'(\w)-[;,.:!?]+(\s)', r'\1-\2', text)
     text = re.sub(r'(\w)-\s*\n\s*(\w)', r'\1\2', text)
@@ -88,8 +97,7 @@ def format_text_for_tts(text: str) -> str:
     # 5. Remove espaços antes de pontuação
     text = re.sub(r'\s+([.,;:!?\)\]])', r'\1', text)
 
-    # 6. Remove números isolados (paginação)
-    text = re.sub(r'\b\d{1,4}\b(?=\s|$)', '', text)
+    # 6. Normalização final de espaços
     text = re.sub(r' {2,}', ' ', text)
 
     return text.strip()

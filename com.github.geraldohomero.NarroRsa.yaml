@@ -1,0 +1,35 @@
+app-id: com.github.geraldohomero.NarroRsa
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: narro-rsa
+finish-args:
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=network
+  - --socket=pulseaudio
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.Flatpak
+  - --filesystem=xdg-run/narro-rsa:create
+  - --filesystem=xdg-config/narro-rsa:create
+  - --own-name=com.github.geraldohomero.NarroRsa
+modules:
+  - name: narro-rsa
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/bin
+      - mkdir -p /app/share/applications
+      - mkdir -p /app/share/metainfo
+      - mkdir -p /app/share/icons/hicolor/512x512/apps
+      - cp main_window.py /app/bin/narro-rsa
+      - cp ler_texto.py /app/bin/ler_texto.py
+      - cp -r narro_rsa /app/bin/
+      - chmod +x /app/bin/narro-rsa
+      - chmod +x /app/bin/ler_texto.py
+      - cp com.github.geraldohomero.NarroRsa.desktop /app/share/applications/
+      - cp com.github.geraldohomero.NarroRsa.metainfo.xml /app/share/metainfo/
+      - cp assets/com.github.geraldohomero.NarroRsa.png /app/share/icons/hicolor/512x512/apps/
+    sources:
+      - type: dir
+        path: .

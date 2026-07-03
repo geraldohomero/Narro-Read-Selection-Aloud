@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import subprocess
 
+from .subprocess_helper import run_on_host
+
 
 def get_clipboard_text(primary: bool = False) -> str:
     """Captura texto da área de transferência via ``wl-paste`` (Wayland) ou X11.
@@ -23,7 +25,7 @@ def get_clipboard_text(primary: bool = False) -> str:
     if primary:
         for cmd in (["xclip", "-o", "-selection", "primary"], ["xsel", "-p", "-o"]):
             try:
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=1)
+                res = run_on_host(cmd, capture_output=True, text=True, timeout=1)
                 if res.returncode == 0 and res.stdout.strip():
                     return res.stdout.strip()
             except OSError:
@@ -31,7 +33,7 @@ def get_clipboard_text(primary: bool = False) -> str:
     else:
         for cmd in (["xclip", "-o", "-selection", "clipboard"], ["xsel", "-b", "-o"]):
             try:
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=1)
+                res = run_on_host(cmd, capture_output=True, text=True, timeout=1)
                 if res.returncode == 0 and res.stdout.strip():
                     return res.stdout.strip()
             except OSError:
@@ -42,7 +44,7 @@ def get_clipboard_text(primary: bool = False) -> str:
     if primary:
         cmd.append("--primary")
     try:
-        result = subprocess.run(
+        result = run_on_host(
             cmd,
             capture_output=True,
             text=True,

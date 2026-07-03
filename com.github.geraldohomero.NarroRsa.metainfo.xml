@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.github.geraldohomero.NarroRsa</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Narro-RSA</name>
+  <summary>Text-to-Speech (TTS) reader that reads text from your clipboard</summary>
+  <description>
+    <p>
+      Narro-RSA is a system utility and accessibility tool that lets you read any copied text aloud using Microsoft Edge Online TTS or local Piper TTS models.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.github.geraldohomero.NarroRsa.desktop</launchable>
+  <url type="homepage">https://github.com/geraldohomero/narro-rsa</url>
+  <provides>
+    <binary>narro-rsa</binary>
+  </provides>
+</component>

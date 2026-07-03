@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Narro-RSA
+Comment=Leitor de Seleção de Texto por Síntese de Voz (TTS)
+Exec=narro-rsa
+Icon=com.github.geraldohomero.NarroRsa
+Categories=Utility;Accessibility;AudioVideo;
+Terminal=false
+StartupNotify=true
