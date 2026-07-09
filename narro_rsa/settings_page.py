@@ -588,8 +588,21 @@ class SettingsPage(Gtk.Box):
                     size_mb = f"{total_bytes / (1024*1024):.1f} MB" if total_bytes > 0 else "Unknown"
 
                     # Monta urls de download
-                    onnx_url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{code}.onnx"
-                    json_url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{code}.onnx.json"
+                    onnx_rel_path = ""
+                    json_rel_path = ""
+                    for filepath in files_dict.keys():
+                        if filepath.endswith(".onnx"):
+                            onnx_rel_path = filepath
+                        elif filepath.endswith(".onnx.json"):
+                            json_rel_path = filepath
+                    
+                    if not onnx_rel_path:
+                        onnx_rel_path = f"{code}.onnx"
+                    if not json_rel_path:
+                        json_rel_path = f"{code}.onnx.json"
+
+                    onnx_url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{onnx_rel_path}"
+                    json_url = f"https://huggingface.co/rhasspy/piper-voices/resolve/main/{json_rel_path}"
 
                     is_active = (code == self.current_voice)
                     self.voice_liststore.append([
