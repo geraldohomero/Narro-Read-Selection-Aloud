@@ -10,7 +10,8 @@ import gi
 
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, GLib, Gtk
+gi.require_version("Adw", "1")
+from gi.repository import Gdk, GLib, Gtk, Adw
 
 from narro_rsa.constants import CONFIG_DIR, EDGE_VOICES_CACHE, PIPER_VOICES_DIR
 from narro_rsa.mpv_control import send_mpv_command
@@ -56,15 +57,16 @@ FALLBACK_EDGE_VOICES = [
 ]
 
 
-class SettingsPage(Gtk.Box):
+class SettingsPage(Adw.PreferencesWindow):
     def __init__(self, main_window):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        super().__init__(
+            transient_for=main_window,
+            modal=True,
+            title=_("settings"),
+            default_width=600,
+            default_height=550
+        )
         self.main_window = main_window
-
-        self.set_margin_start(16)
-        self.set_margin_end(16)
-        self.set_margin_top(16)
-        self.set_margin_bottom(16)
 
         # Carrega preferências salvas
         self.settings = load_settings()
@@ -75,7 +77,7 @@ class SettingsPage(Gtk.Box):
         self.current_voice = self.settings.get("voice", None)
         self.current_speed = float(self.settings.get("speed", 1.0))
         self.current_theme = self.settings.get("theme", "light")
-        if self.current_theme not in ("light", "dark"):
+        if self.current_theme not in ("light", "dark", "system"):
             self.current_theme = "light"
         self.current_ui_lang = self.settings.get("ui_lang", "en")
 
@@ -96,17 +98,33 @@ class SettingsPage(Gtk.Box):
 
         # Define estado inicial do mecanismo
         self._is_initializing_combos = True
-        self.engine_combo.set_active_id(self.current_engine)
+        self.engine_combo.set_selected(0 if self.current_engine == "edge-tts" else 1)
+        
+        theme_idx = 0
+        if self.current_theme == "dark":
+            theme_idx = 1
+        elif self.current_theme == "system":
+            theme_idx = 2
+        self.theme_combo.set_selected(theme_idx)
+        
+        lang_idx = 0
+        if self.current_ui_lang == "pt_BR":
+            lang_idx = 1
+        elif self.current_ui_lang == "zh_CN":
+            lang_idx = 2
+        self.ui_lang_combo.set_selected(lang_idx)
+        
         self._is_initializing_combos = False
 
         # Conecta os sinais
-        self.engine_combo.connect("changed", self._on_engine_changed)
-        self.theme_combo.connect("changed", self._on_theme_changed)
+        self.engine_combo.connect("notify::selected", self._on_engine_changed)
+        self.theme_combo.connect("notify::selected", self._on_theme_changed)
         self.speed_scale.connect("value-changed", self._on_speed_scale_changed)
         self.search_entry.connect("search-changed", self._on_search_changed)
         self.download_btn.connect("clicked", self._on_download_clicked)
         self.remove_btn.connect("clicked", self._on_remove_clicked)
         self.lang_combo.connect("changed", self._on_lang_combo_changed)
+        self.ui_lang_combo.connect("notify::selected", self._on_ui_lang_changed)
 
         # Conecta seleção do painel de vozes
         voice_selection = self.voice_treeview.get_selection()
@@ -142,54 +160,84 @@ class SettingsPage(Gtk.Box):
         )
 
     def _build_ui(self):
-        # ── Seção de Voz Ativa no Topo ──
+        # Aba Geral
+        self.page_general = Adw.PreferencesPage()
+        self.add(self.page_general)
+
+        # Grupo Geral
+        self.group_basic = Adw.PreferencesGroup()
+        self.page_general.add(self.group_basic)
+
+        # 1. Mecanismo (Engine)
+        self.engine_row = Adw.ComboRow()
+        self.engine_row.set_model(Gtk.StringList.new(["Edge TTS (Online)", "Piper TTS (Offline)"]))
+        self.group_basic.add(self.engine_row)
+        self.engine_combo = self.engine_row
+
+        # 2. Tema
+        self.theme_row = Adw.ComboRow()
+        self.theme_row.set_model(Gtk.StringList.new([_("light"), _("dark"), _("theme_system")]))
+        self.group_basic.add(self.theme_row)
+        self.theme_combo = self.theme_row
+
+        # 3. Velocidade da Voz
+        self.speed_row = Adw.ActionRow()
+        self.group_basic.add(self.speed_row)
+
+        speed_scale_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        speed_scale_box.set_valign(Gtk.Align.CENTER)
+        self.speed_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.5, 4.0, 0.05)
+        self.speed_scale.set_value(self.current_speed)
+        self.speed_scale.set_draw_value(False)
+        self.speed_scale.set_size_request(200, -1)
+        speed_scale_box.append(self.speed_scale)
+
+        self.speed_value_label = Gtk.Label()
+        self.speed_value_label.set_width_chars(6)
+        speed_scale_box.append(self.speed_value_label)
+        self.speed_row.add_suffix(speed_scale_box)
+
+        # 4. Idioma da Interface (UI Language)
+        self.ui_lang_row = Adw.ComboRow()
+        self.ui_lang_row.set_model(Gtk.StringList.new(["English", "Português (Brasil)", "简体中文"]))
+        self.group_basic.add(self.ui_lang_row)
+        self.ui_lang_combo = self.ui_lang_row
+
+        # Grupo do Catálogo de Vozes
+        self.group_voices = Adw.PreferencesGroup()
+        self.page_general.add(self.group_voices)
+
+        voices_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.group_voices.add(voices_box)
+
+        # Seção de Voz Ativa
         active_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         active_box.add_css_class("active-voice-frame")
         self.active_voice_lbl = Gtk.Label()
         self.active_voice_lbl.set_halign(Gtk.Align.START)
         active_box.append(self.active_voice_lbl)
-        self.append(active_box)
+        voices_box.append(active_box)
 
-        # Painel Superior de Configurações (Grid)
-        grid = Gtk.Grid()
-        grid.set_column_spacing(15)
-        grid.set_row_spacing(10)
-        grid.set_hexpand(True)
-        self.append(grid)
+        # Grid para filtros (Busca e Seleção de Idioma)
+        filter_grid = Gtk.Grid()
+        filter_grid.set_column_spacing(15)
+        filter_grid.set_row_spacing(10)
+        filter_grid.set_hexpand(True)
+        voices_box.append(filter_grid)
 
-        # 1. Mecanismo (Engine)
-        self.engine_label = Gtk.Label()
-        self.engine_label.set_halign(Gtk.Align.START)
-        grid.attach(self.engine_label, 0, 0, 1, 1)
-
-        self.engine_combo = Gtk.ComboBoxText()
-        self.engine_combo.append("edge-tts", "Edge TTS (Online)")
-        self.engine_combo.append("piper", "Piper TTS (Offline)")
-        self.engine_combo.set_hexpand(True)
-        grid.attach(self.engine_combo, 1, 0, 1, 1)
-
-        # 2. Tema
-        self.theme_label = Gtk.Label()
-        self.theme_label.set_halign(Gtk.Align.START)
-        grid.attach(self.theme_label, 2, 0, 1, 1)
-
-        self.theme_combo = Gtk.ComboBoxText()
-        self.theme_combo.set_hexpand(True)
-        grid.attach(self.theme_combo, 3, 0, 1, 1)
-
-        # 3. Busca de Idioma
+        # Busca de Idioma
         self.search_label = Gtk.Label()
         self.search_label.set_halign(Gtk.Align.START)
-        grid.attach(self.search_label, 0, 1, 1, 1)
+        filter_grid.attach(self.search_label, 0, 0, 1, 1)
 
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_hexpand(True)
-        grid.attach(self.search_entry, 1, 1, 1, 1)
+        filter_grid.attach(self.search_entry, 1, 0, 1, 1)
 
-        # 4. Idioma (Dropdown / Gtk.ComboBox)
+        # Idioma (Dropdown / Gtk.ComboBox)
         self.lang_label = Gtk.Label()
         self.lang_label.set_halign(Gtk.Align.START)
-        grid.attach(self.lang_label, 2, 1, 1, 1)
+        filter_grid.attach(self.lang_label, 2, 0, 1, 1)
 
         # Model e filtro para o dropdown de idiomas
         self.lang_liststore = Gtk.ListStore(str)
@@ -201,59 +249,24 @@ class SettingsPage(Gtk.Box):
         renderer_lang = Gtk.CellRendererText()
         self.lang_combo.pack_start(renderer_lang, True)
         self.lang_combo.add_attribute(renderer_lang, "text", 0)
-        grid.attach(self.lang_combo, 3, 1, 1, 1)
+        filter_grid.attach(self.lang_combo, 3, 0, 1, 1)
 
-        # 5. Velocidade da Voz
-        self.speed_title = Gtk.Label()
-        self.speed_title.set_halign(Gtk.Align.START)
-        grid.attach(self.speed_title, 0, 2, 1, 1)
-
-        speed_scale_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        speed_scale_box.set_hexpand(True)
-        grid.attach(speed_scale_box, 1, 2, 3, 1)
-
-        self.speed_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0.5, 4.0, 0.05)
-        self.speed_scale.set_value(self.current_speed)
-        self.speed_scale.set_draw_value(False)
-        self.speed_scale.set_hexpand(True)
-        speed_scale_box.append(self.speed_scale)
-
-        self.speed_value_label = Gtk.Label()
-        self.speed_value_label.set_width_chars(6)
-        speed_scale_box.append(self.speed_value_label)
-
-        # 6. Idioma da Interface (UI Language)
-        self.ui_lang_label = Gtk.Label()
-        self.ui_lang_label.set_halign(Gtk.Align.START)
-        grid.attach(self.ui_lang_label, 0, 3, 1, 1)
-
-        self.ui_lang_combo = Gtk.ComboBoxText()
-        self.ui_lang_combo.append("en", "English")
-        self.ui_lang_combo.append("pt_BR", "Português (Brasil)")
-        self.ui_lang_combo.append("zh_CN", "简体中文")
-        self.ui_lang_combo.set_hexpand(True)
-        self.ui_lang_combo.set_active_id(self.current_ui_lang)
-        self.ui_lang_combo.connect("changed", self._on_ui_lang_changed)
-        grid.attach(self.ui_lang_combo, 1, 3, 3, 1)
-
-        # Separador / Título para vozes
-        self.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
-        
+        # Título para vozes
         self.voices_header_label = Gtk.Label()
         self.voices_header_label.set_halign(Gtk.Align.START)
-        self.append(self.voices_header_label)
+        voices_box.append(self.voices_header_label)
 
         # ScrolledWindow + TreeView de Vozes
         self.voice_scrolled = Gtk.ScrolledWindow()
         self.voice_scrolled.set_vexpand(True)
         self.voice_scrolled.set_min_content_height(180)
         self.voice_scrolled.add_css_class("list-frame")
-        self.append(self.voice_scrolled)
+        voices_box.append(self.voice_scrolled)
 
         self.voice_treeview = Gtk.TreeView()
         self.voice_scrolled.set_child(self.voice_treeview)
 
-        # Colunas de Vozes (Sel., Código, Nome, Gênero/Qualidade, Status, Tamanho)
+        # Colunas de Vozes
         self.renderer_radio = Gtk.CellRendererToggle()
         self.renderer_radio.set_radio(True)
         self.renderer_radio.connect("toggled", self._on_voice_radio_toggled)
@@ -290,13 +303,12 @@ class SettingsPage(Gtk.Box):
         col_size.set_resizable(True)
         self.voice_treeview.append_column(col_size)
 
-        # Model: Col 0: selected, Col 1: code, Col 2: name, Col 3: gender/quality, Col 4: status, Col 5: is_downloaded, Col 6: size, Col 7: onnx_url, Col 8: json_url
         self.voice_liststore = Gtk.ListStore(bool, str, str, str, str, bool, str, str, str)
         self.voice_treeview.set_model(self.voice_liststore)
 
         # Painel do Piper
         self.piper_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        self.append(self.piper_box)
+        voices_box.append(self.piper_box)
 
         btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         self.piper_box.append(btn_box)
@@ -320,12 +332,13 @@ class SettingsPage(Gtk.Box):
 
     def _update_ui_texts(self):
         """Atualiza dinamicamente as strings da UI conforme o idioma da sessão."""
-        self.engine_label.set_text(_("engine"))
-        self.theme_label.set_text(_("theme"))
+        self.engine_row.set_title(_("engine"))
+        self.theme_row.set_title(_("theme"))
+        self.speed_row.set_title(_("speed"))
+        self.ui_lang_row.set_title(_("ui_lang_title"))
+
         self.search_label.set_text(_("search_label"))
         self.lang_label.set_text(_("lang"))
-        self.speed_title.set_text(_("speed"))
-        self.ui_lang_label.set_text(_("ui_lang_title"))
 
         # Placeholder do campo de busca
         self.search_entry.set_placeholder_text(_("search_placeholder"))
@@ -356,10 +369,10 @@ class SettingsPage(Gtk.Box):
         self._update_current_selection_label()
 
     def _repopulate_theme_combo(self):
-        self.theme_combo.remove_all()
-        self.theme_combo.append("light", _("light"))
-        self.theme_combo.append("dark", _("dark"))
-        self.theme_combo.set_active_id(self.current_theme)
+        selected = self.theme_combo.get_selected()
+        model = Gtk.StringList.new([_("light"), _("dark"), _("theme_system")])
+        self.theme_combo.set_model(model)
+        self.theme_combo.set_selected(selected)
 
     def _load_catalogs_thread(self):
         """Método em segundo plano para obter as listas de vozes da Microsoft e do Piper."""
@@ -490,11 +503,12 @@ class SettingsPage(Gtk.Box):
             if first_iter:
                 self.lang_combo.set_active_iter(first_iter)
 
-    def _on_engine_changed(self, combo):
+    def _on_engine_changed(self, combo, pspec):
         if self._is_initializing_combos:
             return
-        new_engine = combo.get_active_id()
-        if not new_engine or new_engine == self.current_engine:
+        selected = combo.get_selected()
+        new_engine = "edge-tts" if selected == 0 else "piper"
+        if new_engine == self.current_engine:
             return
 
         self.current_engine = new_engine
@@ -710,10 +724,12 @@ class SettingsPage(Gtk.Box):
             self.remove_btn.set_sensitive(False)
             self.info_label.set_markup(f"<span foreground='orange'>{_('not_downloaded')}</span>")
 
-    def _on_theme_changed(self, combo):
-        theme = combo.get_active_id()
-        if not theme:
+    def _on_theme_changed(self, combo, pspec):
+        if self._is_initializing_combos:
             return
+        selected = combo.get_selected()
+        theme_map = {0: "light", 1: "dark", 2: "system"}
+        theme = theme_map.get(selected, "light")
         self.current_theme = theme
         save_settings(theme=theme)
         self._apply_theme()
@@ -724,14 +740,13 @@ class SettingsPage(Gtk.Box):
 
     def _apply_theme(self):
         theme_val = self.current_theme
-        gtk_settings = Gtk.Settings.get_default()
-        if not gtk_settings:
-            return
-
+        style_manager = Adw.StyleManager.get_default()
         if theme_val == "dark":
-            gtk_settings.set_property("gtk-application-prefer-dark-theme", True)
+            style_manager.set_color_scheme(Adw.ColorScheme.PREFER_DARK)
+        elif theme_val == "light":
+            style_manager.set_color_scheme(Adw.ColorScheme.PREFER_LIGHT)
         else:
-            gtk_settings.set_property("gtk-application-prefer-dark-theme", False)
+            style_manager.set_color_scheme(Adw.ColorScheme.DEFAULT)
 
     def _on_speed_scale_changed(self, scale):
         val = scale.get_value()
@@ -835,7 +850,7 @@ class SettingsPage(Gtk.Box):
 
         # Janela de diálogo nativa GTK4 para confirmação
         dialog = Gtk.MessageDialog(
-            transient_for=self.main_window,
+            transient_for=self,
             modal=True,
             message_type=Gtk.MessageType.QUESTION,
             buttons=Gtk.ButtonsType.YES_NO,
@@ -873,9 +888,13 @@ class SettingsPage(Gtk.Box):
         dialog.connect("response", on_confirm_response)
         dialog.present()
 
-    def _on_ui_lang_changed(self, combo):
-        lang_code = combo.get_active_id()
-        if not lang_code or lang_code == self.current_ui_lang:
+    def _on_ui_lang_changed(self, combo, pspec):
+        if self._is_initializing_combos:
+            return
+        selected = combo.get_selected()
+        lang_map = {0: "en", 1: "pt_BR", 2: "zh_CN"}
+        lang_code = lang_map.get(selected, "en")
+        if lang_code == self.current_ui_lang:
             return
         self.current_ui_lang = lang_code
         save_settings(ui_lang=lang_code)
