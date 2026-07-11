@@ -13,7 +13,10 @@ import gi
 
 gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gdk, GLib, Gtk
+gi.require_version("Adw", "1")
+from gi.repository import Gdk, GLib, Gtk, Adw
+
+Adw.init()
 
 from narro_rsa.clipboard import get_clipboard_text
 from narro_rsa.constants import (
@@ -38,7 +41,7 @@ from narro_rsa.settings_page import SettingsPage
 # Janela Principal
 # ============================================================================
 
-class MainWindow(Gtk.ApplicationWindow):
+class MainWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title=_("title"))
         self.set_default_size(550, 480)
@@ -48,21 +51,17 @@ class MainWindow(Gtk.ApplicationWindow):
 
         self._apply_css()
 
-        # Configuração da HeaderBar (GNOME HIG)
-        self.header_bar = Gtk.HeaderBar()
+        # StyleManager setup
+        self.style_manager = Adw.StyleManager.get_default()
+        self._apply_theme_from_settings()
+
+        # Configuração da HeaderBar (Libadwaita HeaderBar)
+        self.header_bar = Adw.HeaderBar()
         self.set_titlebar(self.header_bar)
 
-        self.header_title = Gtk.Label()
-        self.header_title.set_markup(f"<span font='12' weight='bold'>{_('title')}</span>")
+        self.header_title = Adw.WindowTitle()
+        self.header_title.set_title(_("title"))
         self.header_bar.set_title_widget(self.header_title)
-
-        # Botão Voltar na HeaderBar (inicialmente oculto)
-        self.back_btn = Gtk.Button()
-        self.back_btn.set_icon_name("go-previous-symbolic")
-        self.back_btn.set_tooltip_text(_("back"))
-        self.back_btn.connect("clicked", lambda x: self.show_reader_page())
-        self.back_btn.set_visible(False)
-        self.header_bar.pack_start(self.back_btn)
 
         # Botão Hambúrguer na HeaderBar (inicialmente visível)
         self.menu_btn = Gtk.MenuButton()
@@ -91,18 +90,9 @@ class MainWindow(Gtk.ApplicationWindow):
         about_menu_btn.connect("clicked", lambda x: (popover.popdown(), self.show_about_dialog()))
         popover_box.append(about_menu_btn)
 
-        # Layout Stack para alternância
-        self.stack = Gtk.Stack()
-        self.stack.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
-        self.stack.set_transition_duration(250)
-        self.set_child(self.stack)
-
-        # Inicializa as páginas
+        # Inicializa a página do leitor
         self.reader_page = ReaderPage(self)
-        self.settings_page = SettingsPage(self)
-
-        self.stack.add_named(self.reader_page, "reader")
-        self.stack.add_named(self.settings_page, "settings")
+        self.set_content(self.reader_page)
 
         self.connect("notify::is-active", self._on_window_active)
 
@@ -132,35 +122,35 @@ class MainWindow(Gtk.ApplicationWindow):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-    def show_settings_page(self):
-        self.stack.set_visible_child_name("settings")
-        self.back_btn.set_visible(True)
-        self.menu_btn.set_visible(False)
-        self.header_title.set_markup(f"<span font='12' weight='bold'>{_('settings')}</span>")
+    def _apply_theme_from_settings(self):
+        settings = load_settings()
+        theme_val = settings.get("theme", "light")
+        if theme_val == "dark":
+            self.style_manager.set_color_scheme(Adw.ColorScheme.PREFER_DARK)
+        elif theme_val == "light":
+            self.style_manager.set_color_scheme(Adw.ColorScheme.PREFER_LIGHT)
+        else:
+            self.style_manager.set_color_scheme(Adw.ColorScheme.DEFAULT)
 
-    def show_reader_page(self):
-        self.stack.set_visible_child_name("reader")
-        self.back_btn.set_visible(False)
-        self.menu_btn.set_visible(True)
-        self.header_title.set_markup(f"<span font='12' weight='bold'>{_('title')}</span>")
-        self.reader_page.reload_ui_settings()
+    def show_settings_page(self):
+        self.settings_page = SettingsPage(self)
+        self.settings_page.present()
 
     def show_about_dialog(self):
-        about = Gtk.AboutDialog()
+        about = Adw.AboutWindow()
         about.set_transient_for(self)
         about.set_modal(True)
-        about.set_program_name("Narro-RSA")
+        about.set_developer_name("Geraldo Homero")
         about.set_version("1.1.0")
         about.set_comments(_("about_comments"))
         about.set_copyright("Copyright © 2026 Geraldo Homero")
         about.set_license_type(Gtk.License.MIT_X11)
-        about.set_logo_icon_name("com.github.geraldohomero.NarroRsa")
+        about.set_application_icon("com.github.geraldohomero.NarroRsa")
         about.present()
 
     def update_ui_texts(self):
         """Atualiza todas as strings de tradução da aplicação quando a linguagem muda."""
-        self.header_title.set_markup(f"<span font='12' weight='bold'>{_('title')}</span>")
-        self.back_btn.set_tooltip_text(_("back"))
+        self.header_title.set_title(_("title"))
         
         # Reconstrói popover do hambúrguer
         popover = self.menu_btn.get_popover()
@@ -187,9 +177,9 @@ class MainWindow(Gtk.ApplicationWindow):
         
         # Repassa atualizações para os filhos
         self.reader_page.reload_ui_settings()
-        self.settings_page._update_ui_texts()
 
     def _load_and_update_settings(self):
+        self._apply_theme_from_settings()
         self.reader_page.reload_ui_settings()
 
     def _on_window_active(self, window, pspec):
@@ -232,7 +222,7 @@ class MainWindow(Gtk.ApplicationWindow):
 # Aplicação GTK
 # ============================================================================
 
-class NarroApp(Gtk.Application):
+class NarroApp(Adw.Application):
     def __init__(self):
         super().__init__(application_id="com.github.geraldohomero.NarroRsa")
 
