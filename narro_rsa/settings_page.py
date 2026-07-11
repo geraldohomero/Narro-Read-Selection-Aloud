@@ -63,8 +63,8 @@ class SettingsPage(Adw.PreferencesWindow):
             transient_for=main_window,
             modal=True,
             title=_("settings"),
-            default_width=600,
-            default_height=550
+            default_width=620,
+            default_height=700
         )
         self.main_window = main_window
 
