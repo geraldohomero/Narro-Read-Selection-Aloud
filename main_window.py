@@ -55,9 +55,12 @@ class MainWindow(Adw.ApplicationWindow):
         self.style_manager = Adw.StyleManager.get_default()
         self._apply_theme_from_settings()
 
+        # Layout usando ToolbarView
+        self.toolbar_view = Adw.ToolbarView()
+
         # Configuração da HeaderBar (Libadwaita HeaderBar)
         self.header_bar = Adw.HeaderBar()
-        self.set_titlebar(self.header_bar)
+        self.toolbar_view.add_top_bar(self.header_bar)
 
         self.header_title = Adw.WindowTitle()
         self.header_title.set_title(_("title"))
@@ -90,9 +93,10 @@ class MainWindow(Adw.ApplicationWindow):
         about_menu_btn.connect("clicked", lambda x: (popover.popdown(), self.show_about_dialog()))
         popover_box.append(about_menu_btn)
 
-        # Inicializa a página do leitor
+        # Inicializa a página do leitor e define como conteúdo do ToolbarView
         self.reader_page = ReaderPage(self)
-        self.set_content(self.reader_page)
+        self.toolbar_view.set_content(self.reader_page)
+        self.set_content(self.toolbar_view)
 
         self.connect("notify::is-active", self._on_window_active)
 
