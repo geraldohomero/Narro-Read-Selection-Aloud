@@ -335,6 +335,8 @@ def main():
             try:
                 with open(TMP_TEXT_FILE, "w", encoding="utf-8") as fh:
                     fh.write(text)
+                with open(LAST_READ_FILE, "w", encoding="utf-8") as fh:
+                    fh.write(text)
             except OSError:
                 sys.exit(0)
                 

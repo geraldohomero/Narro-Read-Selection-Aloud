@@ -30,6 +30,8 @@ TMP_AUDIO_MP3: str = os.path.join(_RUNTIME_DIR, "narro-rsa.mp3")
 TMP_AUDIO_WAV: str = os.path.join(_RUNTIME_DIR, "narro-rsa.wav")
 TMP_TEXT_FILE: str = os.path.join(_RUNTIME_DIR, "narro-rsa-text.txt")
 LAST_READ_FILE: str = os.path.join(_RUNTIME_DIR, "narro-rsa-last-text.txt")
+LAST_PRIMARY_FILE: str = os.path.join(_RUNTIME_DIR, "narro-rsa-last-primary.txt")
+LAST_CLIPBOARD_FILE: str = os.path.join(_RUNTIME_DIR, "narro-rsa-last-clipboard.txt")
 
 # ---------------------------------------------------------------------------
 # Caminhos de configuração persistente

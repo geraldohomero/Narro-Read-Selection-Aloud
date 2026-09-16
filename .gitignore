@@ -11,3 +11,5 @@ build/
 *.sock
 *.lock
 repo/
+
+.flatpak-builder/

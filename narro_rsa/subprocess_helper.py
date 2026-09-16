@@ -79,10 +79,28 @@ def check_and_start_daemon():
         if IS_FLATPAK:
             host_script = find_installed_daemon()
             if host_script:
-                subprocess.Popen(["flatpak-spawn", "--host", "python3", host_script, "--daemon"])
+                subprocess.Popen(
+                    [
+                        "flatpak-spawn",
+                        "--host",
+                        "sh",
+                        "-c",
+                        f'nohup python3 "{host_script}" --daemon >/dev/null 2>&1 &',
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
         else:
             # Em modo tradicional, localiza ler_texto.py no mesmo diretório do arquivo principal
             script_dir = os.path.dirname(os.path.realpath(sys.argv[0]))
             ler_texto_script = os.path.join(script_dir, "ler_texto.py")
             if os.path.exists(ler_texto_script):
-                subprocess.Popen([sys.executable, ler_texto_script, "--daemon"])
+                subprocess.Popen(
+                    [sys.executable, ler_texto_script, "--daemon"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,
+                )

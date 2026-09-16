@@ -21,7 +21,14 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk
 
 from narro_rsa.clipboard import get_clipboard_text
-from narro_rsa.constants import LOCKFILE, MPV_SOCKET, TMP_AUDIO_MP3, TMP_AUDIO_WAV, TMP_TEXT_FILE
+from narro_rsa.constants import (
+    LAST_READ_FILE,
+    LOCKFILE,
+    MPV_SOCKET,
+    TMP_AUDIO_MP3,
+    TMP_AUDIO_WAV,
+    TMP_TEXT_FILE,
+)
 from narro_rsa.indicator import TTSIndicator
 from narro_rsa.mpv_control import kill_mpv
 
@@ -56,6 +63,8 @@ def _acquire_single_instance(text: str) -> bool:
             if text:
                 try:
                     with open(TMP_TEXT_FILE, "w", encoding="utf-8") as fh:
+                        fh.write(text)
+                    with open(LAST_READ_FILE, "w", encoding="utf-8") as fh:
                         fh.write(text)
                 except OSError:
                     pass
