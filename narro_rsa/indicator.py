@@ -41,7 +41,7 @@ from .constants import (
 )
 from .mpv_control import kill_mpv, send_mpv_command
 from .settings import load_settings, save_settings
-from .subprocess_helper import popen_on_host
+from .subprocess_helper import popen_command
 from .tts_engine import EngineType, TTSRequest, generate_audio
 
 
@@ -407,7 +407,7 @@ class TTSIndicator:
             except OSError:
                 pass
 
-            self._mpv_process = popen_on_host(
+            self._mpv_process = popen_command(
                 [
                     "mpv",
                     "--no-video",

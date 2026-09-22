@@ -6,15 +6,100 @@ command: narro-rsa
 finish-args:
   - --socket=wayland
   - --socket=fallback-x11
+  - --share=ipc
   - --share=network
   - --socket=pulseaudio
+  - --device=dri
   - --talk-name=org.kde.StatusNotifierWatcher
   - --talk-name=org.freedesktop.Notifications
   - --talk-name=org.freedesktop.Flatpak
   - --filesystem=xdg-run/narro-rsa:create
   - --filesystem=xdg-config/narro-rsa:create
   - --own-name=com.github.geraldohomero.NarroRsa
+
+build-options:
+  build-args:
+    - --share=network
+
+cleanup:
+  - '*.la'
+  - '*.a'
+  - /include
+  - /lib/pkgconfig
+
 modules:
+  - name: wl-clipboard
+    buildsystem: meson
+    config-opts:
+      - -Dfishcompletiondir=no
+      - -Dzshcompletiondir=no
+    sources:
+      - type: archive
+        url: https://github.com/bugaevc/wl-clipboard/archive/refs/tags/v2.2.1.tar.gz
+        sha256: 6eb8081207fb5581d1d82c4bcd9587205a31a3d47bea3ebeb7f41aa1143783eb
+
+  - name: libass
+    buildsystem: autotools
+    config-opts:
+      - --disable-static
+    sources:
+      - type: archive
+        url: https://github.com/libass/libass/releases/download/0.17.4/libass-0.17.4.tar.xz
+        sha256: 78f1179b838d025e9c26e8fef33f8092f65611444ffa1bfc0cfac6a33511a05a
+
+  - name: libplacebo
+    buildsystem: meson
+    config-opts:
+      - -Ddemos=false
+    sources:
+      - type: git
+        url: https://github.com/haasn/libplacebo.git
+        tag: v7.360.1
+        commit: cee9b076f2c63104ccfd497fa79c39a867293ec4
+
+  - name: mpv
+    buildsystem: meson
+    config-opts:
+      - -Dbuild-date=false
+      - -Dlibmpv=false
+      - -Dmanpage-build=disabled
+      - -Dx11=disabled
+      - -Dwayland=enabled
+      - -Dpulse=enabled
+      - -Dpipewire=enabled
+    sources:
+      - type: archive
+        url: https://github.com/mpv-player/mpv/archive/refs/tags/v0.38.0.tar.gz
+        sha256: 86d9ef40b6058732f67b46d0bbda24a074fae860b3eaae05bab3145041303066
+
+  - name: piper
+    buildsystem: simple
+    build-commands:
+      - mkdir -p /app/piper
+      - cp -r * /app/piper/
+      - mkdir -p /app/bin
+      - |
+        cat << 'EOF' > /app/bin/piper
+        #!/bin/sh
+        export LD_LIBRARY_PATH=/app/piper:${LD_LIBRARY_PATH}
+        export ESPEAK_DATA_PATH=/app/piper/espeak-ng-data
+        exec /app/piper/piper "$@"
+        EOF
+      - chmod +x /app/bin/piper
+    sources:
+      - type: archive
+        url: https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+        sha256: a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992
+
+  - name: edge-tts
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-cache-dir --prefix=/app edge-tts
+    sources:
+      - type: file
+        url: https://raw.githubusercontent.com/flatpak/flatpak-builder/main/README.md
+        sha256: 0ca552651e3a2724f1112825a55991d364588a5e5b9aba19befb5584d434807b
+
   - name: narro-rsa
     buildsystem: simple
     build-commands:

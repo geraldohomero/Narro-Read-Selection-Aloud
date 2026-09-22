@@ -13,7 +13,7 @@ import subprocess
 from typing import Any
 
 from .constants import MPV_SOCKET
-from .subprocess_helper import run_on_host
+from .subprocess_helper import run_command
 
 
 def send_mpv_command(command: list[Any]) -> dict[str, Any] | None:
@@ -41,7 +41,11 @@ def send_mpv_command(command: list[Any]) -> dict[str, Any] | None:
 def kill_mpv() -> None:
     """Mata qualquer instância do mpv associada ao Narro-RSA."""
     try:
-        run_on_host(
+        send_mpv_command(["quit"])
+    except Exception:
+        pass
+    try:
+        run_command(
             ["pkill", "-f", "mpv.*narro-rsa"],
             capture_output=True,
             timeout=3,

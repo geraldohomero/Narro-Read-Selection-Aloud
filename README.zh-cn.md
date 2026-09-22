@@ -30,7 +30,11 @@
 
 使用 Flatpak 是最简便的安装方法。它将所有依赖项隔离打包在沙盒中，不需要在宿主机手动配置各种底层库，并在首次启动时自动写入 GNOME 键盘快捷键。
 
-#### 1. 在本地编译并安装 Flatpak 包：
+#### 1. 安装 Flatpak 包：
+```bash
+flatpak install --user ./com.github.geraldohomero.NarroRsa.flatpak
+```
+*或直接从清单构建：*
 ```bash
 flatpak-builder --user --install --force-clean --disable-rofiles-fuse build-dir com.github.geraldohomero.NarroRsa.yaml
 ```
@@ -44,58 +48,22 @@ flatpak run com.github.geraldohomero.NarroRsa
 
 ---
 
-### 方案 2：传统安装（宿主机脚本）
-
-如果您更倾向于直接使用系统的 Python 解释器在宿主机运行：
-
-#### 1. 安装系统依赖项：
-- **Fedora**: `sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3`
-- **Ubuntu/Debian**: `sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1`
-- **Arch Linux**: `sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator`
-
-#### 2. 安装 Python TTS 发音引擎：
-```bash
-pipx install edge-tts
-pipx install piper-tts  # 可选的离线本地 TTS 发音引擎
-```
-
-#### 3. 运行安装程序：
-```bash
-git clone https://github.com/geraldohomero/narro-rsa.git
-cd narro-rsa
-bash install.sh
-```
-
----
-
 ## GNOME 快捷键
 
-应用会自动为您在 GNOME 中配置对应的快捷键，执行的命令由于安装方式的不同而有所区别：
+应用会自动为您在 GNOME 中配置对应的快捷键：
 
-### 针对 Flatpak 安装：
 - **朗读剪贴板** (`Super+Alt+L`): `flatpak run com.github.geraldohomero.NarroRsa --play`
 - **直接朗读选中文本** (`Ctrl+\`): `flatpak run com.github.geraldohomero.NarroRsa --primary`
 - **暂停/恢复播放** (`Super+Alt+J`): `flatpak run com.github.geraldohomero.NarroRsa --pause`
 - **停止播放** (`Super+Alt+K`): `flatpak run com.github.geraldohomero.NarroRsa --stop`
 
-### 针对传统安装：
-- **朗读剪贴板** (`Super+Alt+L`): `bash -c "$HOME/.local/bin/ler_texto.sh"`
-- **直接朗读选中文本** (`Ctrl+\`): `bash -c "$HOME/.local/bin/ler_texto.sh --primary"`
-- **暂停/恢复播放** (`Super+Alt+J`): `bash -c "$HOME/.local/bin/pausar_leitura.sh"`
-- **停止播放** (`Super+Alt+K`): `bash -c "$HOME/.local/bin/parar_leitura.sh"`
-
 ---
 
 ## 卸载步骤
 
-### 卸载 Flatpak 应用：
+卸载 Flatpak 应用：
 ```bash
 flatpak remove com.github.geraldohomero.NarroRsa
-```
-
-### 卸载宿主机本地脚本：
-```bash
-bash uninstall.sh
 ```
 
 ---
@@ -104,23 +72,23 @@ bash uninstall.sh
 
 ```
 narro-read-selection-aloud/
-├── main_window.py         # 入口点及 GTK4 主窗口 (带有 Gtk.Stack 与汉堡包导航菜单)
-├── ler_texto.py           # AppIndicator3 托盘守护进程 (GTK3)
+├── main_window.py         # GTK4 / Libadwaita 主窗口 (内置滑动页面导航与汉堡菜单)
+├── ler_texto.py           # 托盘与后台朗读守护进程
 ├── narro_rsa/             # 包含核心业务逻辑的 Python 包
 │   ├── translations.py    # 集中式多语言翻译与格式化辅助模块
-│   ├── reader_page.py     # 朗读播放器界面 GTK4 组件
-│   ├── settings_page.py   # 配置设置界面 GTK4 组件
+│   ├── reader_page.py     # 朗读播放器界面组件
+│   ├── settings_page.py   # 集成语言搜索的配置设置界面
 │   ├── constants.py       # 集中管理路径和常量
 │   ├── settings.py        # 加载/保存 JSON 首选项
 │   ├── mpv_control.py     # 通过 Unix 域套接字与 mpv 进行 IPC 通信
 │   ├── text_formatter.py  # 朗读文本前置格式化（净化PDF噪声）
-│   ├── clipboard.py       # Wayland 剪贴板文本捕获
+│   ├── clipboard.py       # 智能 Wayland 剪贴板解析
 │   ├── subprocess_helper.py # 子进程与守护进程辅助工具
 │   └── tts_engine.py      # 音频生成引擎 (Edge-TTS + Piper)
+├── com.github.geraldohomero.NarroRsa.flatpak      # 独立自包含 Flatpak 安装包
 ├── com.github.geraldohomero.NarroRsa.yaml         # Flatpak 清单
 ├── com.github.geraldohomero.NarroRsa.desktop      # 桌面快捷方式条目
 ├── com.github.geraldohomero.NarroRsa.metainfo.xml # AppStream 元数据
-├── install.sh             # 宿主机安装脚本
 └── assets/                # 图标及其他视觉资源
 ```
 

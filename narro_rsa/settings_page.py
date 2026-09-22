@@ -57,15 +57,9 @@ FALLBACK_EDGE_VOICES = [
 ]
 
 
-class SettingsPage(Adw.PreferencesWindow):
+class SettingsPage(Adw.NavigationPage):
     def __init__(self, main_window):
-        super().__init__(
-            transient_for=main_window,
-            modal=True,
-            title=_("settings"),
-            default_width=620,
-            default_height=700
-        )
+        super().__init__(title=_("settings"), tag="settings")
         self.main_window = main_window
 
         # Carrega preferências salvas
@@ -83,8 +77,8 @@ class SettingsPage(Adw.PreferencesWindow):
 
         self.is_downloading = False
         self.download_thread = None
-        self.filter_text = ""
         self.selected_lang = None
+        self._is_populating_langs = False
 
         # Listas de catálogos dinâmicos
         self.edge_voices = None
@@ -120,10 +114,9 @@ class SettingsPage(Adw.PreferencesWindow):
         self.engine_combo.connect("notify::selected", self._on_engine_changed)
         self.theme_combo.connect("notify::selected", self._on_theme_changed)
         self.speed_scale.connect("value-changed", self._on_speed_scale_changed)
-        self.search_entry.connect("search-changed", self._on_search_changed)
         self.download_btn.connect("clicked", self._on_download_clicked)
         self.remove_btn.connect("clicked", self._on_remove_clicked)
-        self.lang_combo.connect("changed", self._on_lang_combo_changed)
+        self.lang_dropdown.connect("notify::selected-item", self._on_lang_dropdown_changed)
         self.ui_lang_combo.connect("notify::selected", self._on_ui_lang_changed)
 
         # Conecta seleção do painel de vozes
@@ -160,9 +153,18 @@ class SettingsPage(Adw.PreferencesWindow):
         )
 
     def _build_ui(self):
+        self.toolbar_view = Adw.ToolbarView()
+        self.header_bar = Adw.HeaderBar()
+        self.toolbar_view.add_top_bar(self.header_bar)
+
+        self.header_title = Adw.WindowTitle()
+        self.header_title.set_title(_("settings"))
+        self.header_bar.set_title_widget(self.header_title)
+
         # Aba Geral
         self.page_general = Adw.PreferencesPage()
-        self.add(self.page_general)
+        self.toolbar_view.set_content(self.page_general)
+        self.set_child(self.toolbar_view)
 
         # Grupo Geral
         self.group_basic = Adw.PreferencesGroup()
@@ -218,38 +220,23 @@ class SettingsPage(Adw.PreferencesWindow):
         active_box.append(self.active_voice_lbl)
         voices_box.append(active_box)
 
-        # Grid para filtros (Busca e Seleção de Idioma)
-        filter_grid = Gtk.Grid()
-        filter_grid.set_column_spacing(15)
-        filter_grid.set_row_spacing(10)
-        filter_grid.set_hexpand(True)
-        voices_box.append(filter_grid)
+        # Seletor unificado de Idioma com busca integrada
+        lang_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        lang_box.set_hexpand(True)
+        voices_box.append(lang_box)
 
-        # Busca de Idioma
-        self.search_label = Gtk.Label()
-        self.search_label.set_halign(Gtk.Align.START)
-        filter_grid.attach(self.search_label, 0, 0, 1, 1)
-
-        self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_hexpand(True)
-        filter_grid.attach(self.search_entry, 1, 0, 1, 1)
-
-        # Idioma (Dropdown / Gtk.ComboBox)
         self.lang_label = Gtk.Label()
         self.lang_label.set_halign(Gtk.Align.START)
-        filter_grid.attach(self.lang_label, 2, 0, 1, 1)
+        lang_box.append(self.lang_label)
 
-        # Model e filtro para o dropdown de idiomas
-        self.lang_liststore = Gtk.ListStore(str)
-        self.lang_filter_model = Gtk.TreeModelFilter(child_model=self.lang_liststore)
-        self.lang_filter_model.set_visible_func(self.lang_filter_visible_func)
-
-        self.lang_combo = Gtk.ComboBox.new_with_model(self.lang_filter_model)
-        self.lang_combo.set_hexpand(True)
-        renderer_lang = Gtk.CellRendererText()
-        self.lang_combo.pack_start(renderer_lang, True)
-        self.lang_combo.add_attribute(renderer_lang, "text", 0)
-        filter_grid.attach(self.lang_combo, 3, 0, 1, 1)
+        self.lang_string_list = Gtk.StringList.new([])
+        self.lang_dropdown = Gtk.DropDown()
+        expr = Gtk.PropertyExpression.new(Gtk.StringObject, None, "string")
+        self.lang_dropdown.set_expression(expr)
+        self.lang_dropdown.set_model(self.lang_string_list)
+        self.lang_dropdown.set_enable_search(True)
+        self.lang_dropdown.set_hexpand(True)
+        lang_box.append(self.lang_dropdown)
 
         # Título para vozes
         self.voices_header_label = Gtk.Label()
@@ -332,16 +319,16 @@ class SettingsPage(Adw.PreferencesWindow):
 
     def _update_ui_texts(self):
         """Atualiza dinamicamente as strings da UI conforme o idioma da sessão."""
+        self.set_title(_("settings"))
+        if hasattr(self, "header_title"):
+            self.header_title.set_title(_("settings"))
+
         self.engine_row.set_title(_("engine"))
         self.theme_row.set_title(_("theme"))
         self.speed_row.set_title(_("speed"))
         self.ui_lang_row.set_title(_("ui_lang_title"))
 
-        self.search_label.set_text(_("search_label"))
         self.lang_label.set_text(_("lang"))
-
-        # Placeholder do campo de busca
-        self.search_entry.set_placeholder_text(_("search_placeholder"))
 
         # Repopula combo de temas para aplicar as traduções locais
         self._repopulate_theme_combo()
@@ -367,6 +354,10 @@ class SettingsPage(Adw.PreferencesWindow):
 
         # Atualiza rótulo de voz ativa
         self._update_current_selection_label()
+
+    def update_ui_texts(self):
+        """Método público para atualização das traduções da UI."""
+        self._update_ui_texts()
 
     def _repopulate_theme_combo(self):
         selected = self.theme_combo.get_selected()
@@ -437,8 +428,8 @@ class SettingsPage(Adw.PreferencesWindow):
         self._select_current_voice_in_treeview()
 
     def _populate_languages(self):
-        """Popula o dropdown de idiomas de acordo com o mecanismo (Engine)."""
-        self.lang_liststore.clear()
+        """Popula o dropdown de idiomas com busca integrada de acordo com o mecanismo (Engine)."""
+        self._is_populating_langs = True
         langs = set()
 
         if self.current_engine == "edge-tts":
@@ -454,12 +445,15 @@ class SettingsPage(Adw.PreferencesWindow):
                     if lang_code:
                         langs.add(lang_code)
 
-        for l in sorted(list(langs)):
-            self.lang_liststore.append([l])
+        sorted_langs = sorted(list(langs))
+        self.lang_string_list = Gtk.StringList.new(sorted_langs)
+        expr = Gtk.PropertyExpression.new(Gtk.StringObject, None, "string")
+        self.lang_dropdown.set_expression(expr)
+        self.lang_dropdown.set_model(self.lang_string_list)
+        self._is_populating_langs = False
 
     def _select_initial_language(self):
-        """Tenta selecionar o idioma correto de forma proativa."""
-        # Se houver uma voz ativa, escolhe o idioma correspondente a ela
+        """Tenta selecionar o idioma correto de forma proativa no dropdown."""
         target_lang = None
         if self.current_voice:
             target_lang = self.get_language_name_for_voice(self.current_engine, self.current_voice)
@@ -467,41 +461,30 @@ class SettingsPage(Adw.PreferencesWindow):
         if not target_lang:
             target_lang = "pt-BR" if self.current_engine == "edge-tts" else "pt_BR"
 
-        # Procura no model do filtro
-        treeiter = self.lang_filter_model.get_iter_first()
-        found = False
-        while treeiter:
-            val = self.lang_filter_model.get_value(treeiter, 0)
+        n = self.lang_string_list.get_n_items() if self.lang_string_list else 0
+        found_idx = -1
+        for i in range(n):
+            val = self.lang_string_list.get_string(i)
             if val == target_lang:
-                self.lang_combo.set_active_iter(treeiter)
-                self.selected_lang = val
-                found = True
+                found_idx = i
                 break
-            treeiter = self.lang_filter_model.iter_next(treeiter)
 
-        if not found:
-            # Seleciona o primeiro elemento se não encontrou o idioma padrão
-            first_iter = self.lang_filter_model.get_iter_first()
-            if first_iter:
-                self.lang_combo.set_active_iter(first_iter)
-                self.selected_lang = self.lang_filter_model.get_value(first_iter, 0)
+        if found_idx != -1:
+            self.lang_dropdown.set_selected(found_idx)
+            self.selected_lang = target_lang
+        elif n > 0:
+            self.lang_dropdown.set_selected(0)
+            self.selected_lang = self.lang_string_list.get_string(0)
 
-    def lang_filter_visible_func(self, model, treeiter, data):
-        """Filtro de busca para a caixa de seleção do idioma."""
-        if not self.filter_text:
-            return True
-        val = model.get_value(treeiter, 0)
-        return self.filter_text.lower() in val.lower()
-
-    def _on_search_changed(self, entry):
-        self.filter_text = entry.get_text()
-        self.lang_filter_model.refilter()
-        # Se o idioma atual sumir, seleciona o primeiro visível
-        active_iter = self.lang_combo.get_active_iter()
-        if not active_iter:
-            first_iter = self.lang_filter_model.get_iter_first()
-            if first_iter:
-                self.lang_combo.set_active_iter(first_iter)
+    def _on_lang_dropdown_changed(self, dropdown, pspec):
+        if getattr(self, "_is_populating_langs", False):
+            return
+        selected_item = dropdown.get_selected_item()
+        if selected_item and hasattr(selected_item, "get_string"):
+            self.selected_lang = selected_item.get_string()
+            self._populate_voices()
+            self._select_current_voice_in_treeview()
+            self._update_buttons_state()
 
     def _on_engine_changed(self, combo, pspec):
         if self._is_initializing_combos:
@@ -524,14 +507,6 @@ class SettingsPage(Adw.PreferencesWindow):
         self._populate_voices()
         self._update_buttons_state()
         self._update_current_selection_label()
-
-    def _on_lang_combo_changed(self, combo):
-        treeiter = combo.get_active_iter()
-        if treeiter:
-            self.selected_lang = self.lang_filter_model.get_value(treeiter, 0)
-            self._populate_voices()
-            self._select_current_voice_in_treeview()
-            self._update_buttons_state()
 
     def _populate_voices(self):
         """Preenche o ListStore das vozes aplicando filtros de idioma."""
@@ -850,7 +825,7 @@ class SettingsPage(Adw.PreferencesWindow):
 
         # Janela de diálogo nativa GTK4 para confirmação
         dialog = Gtk.MessageDialog(
-            transient_for=self,
+            transient_for=self.main_window,
             modal=True,
             message_type=Gtk.MessageType.QUESTION,
             buttons=Gtk.ButtonsType.YES_NO,

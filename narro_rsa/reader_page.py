@@ -26,7 +26,7 @@ from narro_rsa.constants import (
 from narro_rsa.settings import load_settings, save_settings
 from narro_rsa.mpv_control import kill_mpv, send_mpv_command
 from narro_rsa.tts_engine import EngineType, TTSRequest, generate_audio
-from narro_rsa.subprocess_helper import popen_on_host, check_pid_active, check_and_start_daemon
+from narro_rsa.subprocess_helper import popen_command, check_pid_active, check_and_start_daemon
 from narro_rsa.translations import _
 
 
@@ -174,7 +174,7 @@ class ReaderPage(Gtk.Box):
             if not result.success:
                 return
                 
-            self._mpv_process = popen_on_host([
+            self._mpv_process = popen_command([
                 "mpv",
                 "--no-video",
                 "--really-quiet",
@@ -221,10 +221,10 @@ class ReaderPage(Gtk.Box):
             except OSError:
                 return
 
-            if os.path.exists("/.flatpak-info"):
-                subprocess.run(["flatpak-spawn", "--host", "kill", "-USR1", str(pid)])
-            else:
+            try:
                 os.kill(pid, signal.SIGUSR1)
+            except OSError:
+                pass
         else:
             check_and_start_daemon()
             

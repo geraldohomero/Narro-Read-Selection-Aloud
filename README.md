@@ -30,7 +30,11 @@ Select text in any application, copy it, and use a keyboard shortcut to open the
 
 Installing via Flatpak is the easiest method. It bundles all dependencies inside a sandbox, requires no manual configuration of libraries on your host system, and sets up GNOME keyboard shortcuts automatically.
 
-#### 1. Build and install the Flatpak package locally:
+#### 1. Install the Flatpak package:
+```bash
+flatpak install --user ./com.github.geraldohomero.NarroRsa.flatpak
+```
+*Or build directly from the manifest:*
 ```bash
 flatpak-builder --user --install --force-clean --disable-rofiles-fuse build-dir com.github.geraldohomero.NarroRsa.yaml
 ```
@@ -44,58 +48,22 @@ flatpak run com.github.geraldohomero.NarroRsa
 
 ---
 
-### Option 2: Traditional Installation (Host Script)
-
-If you prefer to run the application directly on the host using your system Python interpreter:
-
-#### 1. Install System Dependencies:
-- **Fedora**: `sudo dnf install wl-clipboard mpv libnotify python3-gobject gtk3 gtk4 libappindicator-gtk3`
-- **Ubuntu/Debian**: `sudo apt install wl-clipboard mpv libnotify-bin python3-gi gir1.2-gtk-3.0 gir1.2-gtk-4.0 gir1.2-ayatanaappindicator3-0.1`
-- **Arch Linux**: `sudo pacman -S wl-clipboard mpv libnotify python-gobject gtk3 gtk4 libayatana-appindicator`
-
-#### 2. Install Python TTS Engines:
-```bash
-pipx install edge-tts
-pipx install piper-tts  # Optional for offline local TTS
-```
-
-#### 3. Run the installer:
-```bash
-git clone https://github.com/geraldohomero/narro-rsa.git
-cd narro-rsa
-bash install.sh
-```
-
----
-
 ## GNOME Keyboard Shortcuts
 
-The app configures these shortcuts automatically on GNOME. The corresponding commands differ depending on your installation:
+The app configures these shortcuts automatically on GNOME:
 
-### For Flatpak Installation:
 - **Read Clipboard** (`Super+Alt+L`): `flatpak run com.github.geraldohomero.NarroRsa --play`
 - **Read Selection Direct** (`Ctrl+\`): `flatpak run com.github.geraldohomero.NarroRsa --primary`
 - **Pause/Resume** (`Super+Alt+J`): `flatpak run com.github.geraldohomero.NarroRsa --pause`
 - **Stop Playback** (`Super+Alt+K`): `flatpak run com.github.geraldohomero.NarroRsa --stop`
 
-### For Traditional Installation:
-- **Read Clipboard** (`Super+Alt+L`): `bash -c "$HOME/.local/bin/ler_texto.sh"`
-- **Read Selection Direct** (`Ctrl+\`): `bash -c "$HOME/.local/bin/ler_texto.sh --primary"`
-- **Pause/Resume** (`Super+Alt+J`): `bash -c "$HOME/.local/bin/pausar_leitura.sh"`
-- **Stop Playback** (`Super+Alt+K`): `bash -c "$HOME/.local/bin/parar_leitura.sh"`
-
 ---
 
 ## Uninstallation
 
-### To uninstall the Flatpak app:
+To uninstall the Flatpak app:
 ```bash
 flatpak remove com.github.geraldohomero.NarroRsa
-```
-
-### To uninstall host scripts:
-```bash
-bash uninstall.sh
 ```
 
 ---
@@ -104,23 +72,23 @@ bash uninstall.sh
 
 ```
 narro-read-selection-aloud/
-├── main_window.py         # Entrypoint & GTK4 Main Window (with Gtk.Stack and Hamburger menu)
-├── ler_texto.py           # AppIndicator3 tray daemon launcher (GTK3)
+├── main_window.py         # GTK4 / Libadwaita Main Window (with integrated slide navigation)
+├── ler_texto.py           # Tray and reader daemon
 ├── narro_rsa/             # Python package with project logic
-│   ├── translations.py    # Centralized translations & formatting helper
-│   ├── reader_page.py     # Reader UI GTK4 component
-│   ├── settings_page.py   # Settings UI GTK4 component
+│   ├── translations.py    # Centralized translations dictionary
+│   ├── reader_page.py     # Reader UI component
+│   ├── settings_page.py   # Settings page with integrated language search
 │   ├── constants.py       # Centralized paths and constants
-│   ├── settings.py        # Preferences loader
+│   ├── settings.py        # Preferences loader and persistence
 │   ├── mpv_control.py     # IPC Unix socket controls for mpv
 │   ├── text_formatter.py  # Text cleanup for PDF reading
-│   ├── clipboard.py       # Wayland clipboard capture
+│   ├── clipboard.py       # Intelligent Wayland clipboard resolution
 │   ├── subprocess_helper.py # Daemon and process utilities
 │   └── tts_engine.py      # Audio generator (Edge-TTS + Piper)
+├── com.github.geraldohomero.NarroRsa.flatpak      # Self-contained Flatpak bundle
 ├── com.github.geraldohomero.NarroRsa.yaml         # Flatpak Manifest
 ├── com.github.geraldohomero.NarroRsa.desktop      # Desktop entry
 ├── com.github.geraldohomero.NarroRsa.metainfo.xml # AppStream Metadata
-├── install.sh             # Host installer script
 └── assets/                # Icon and visual resources
 ```
 

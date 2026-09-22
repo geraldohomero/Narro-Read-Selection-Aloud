@@ -10,6 +10,8 @@ build/
 *.mp3
 *.sock
 *.lock
-repo/
 
+# Flatpak build artifacts
+build-dir/
 .flatpak-builder/
+repo/

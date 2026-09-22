@@ -10,11 +10,14 @@ import subprocess
 import time
 
 from .constants import LAST_CLIPBOARD_FILE, LAST_PRIMARY_FILE, LAST_READ_FILE
-from .subprocess_helper import run_on_host
+from .subprocess_helper import run_command
+
+# Mantém run_on_host como alias para compatibilidade com testes unitários
+run_on_host = run_command
 
 
 def _read_tool(cmd: list[str]) -> str:
-    """Executa um comando no host e retorna stdout limpo, ou string vazia."""
+    """Executa a ferramenta de clipboard e retorna stdout limpo, ou string vazia."""
     try:
         res = run_on_host(cmd, capture_output=True, text=True, timeout=2)
         if res.returncode == 0 and res.stdout:

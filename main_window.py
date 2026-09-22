@@ -30,7 +30,7 @@ from narro_rsa.constants import (
 from narro_rsa.settings import load_settings, save_settings
 from narro_rsa.mpv_control import kill_mpv, send_mpv_command
 from narro_rsa.tts_engine import EngineType, TTSRequest, generate_audio
-from narro_rsa.subprocess_helper import popen_on_host, check_pid_active, check_and_start_daemon
+from narro_rsa.subprocess_helper import popen_command, check_pid_active, check_and_start_daemon
 from narro_rsa.translations import _
 
 from narro_rsa.reader_page import ReaderPage
@@ -54,6 +54,12 @@ class MainWindow(Adw.ApplicationWindow):
         # StyleManager setup
         self.style_manager = Adw.StyleManager.get_default()
         self._apply_theme_from_settings()
+
+        # Navegação hierárquica usando NavigationView
+        self.navigation_view = Adw.NavigationView()
+
+        # Página do leitor (página raiz de navegação)
+        self.reader_nav_page = Adw.NavigationPage(title=_("title"), tag="reader")
 
         # Layout usando ToolbarView
         self.toolbar_view = Adw.ToolbarView()
@@ -96,7 +102,13 @@ class MainWindow(Adw.ApplicationWindow):
         # Inicializa a página do leitor e define como conteúdo do ToolbarView
         self.reader_page = ReaderPage(self)
         self.toolbar_view.set_content(self.reader_page)
-        self.set_content(self.toolbar_view)
+        self.reader_nav_page.set_child(self.toolbar_view)
+        self.navigation_view.add(self.reader_nav_page)
+
+        # Inicializa a página de configurações integrada
+        self.settings_page = SettingsPage(self)
+
+        self.set_content(self.navigation_view)
 
         self.connect("notify::is-active", self._on_window_active)
 
@@ -137,8 +149,13 @@ class MainWindow(Adw.ApplicationWindow):
             self.style_manager.set_color_scheme(Adw.ColorScheme.DEFAULT)
 
     def show_settings_page(self):
-        self.settings_page = SettingsPage(self)
-        self.settings_page.present()
+        page = self.navigation_view.find_page("settings")
+        if not page:
+            if not hasattr(self, "settings_page") or self.settings_page is None:
+                self.settings_page = SettingsPage(self)
+            self.navigation_view.push(self.settings_page)
+        elif self.navigation_view.get_visible_page() != page:
+            self.navigation_view.push_by_tag("settings")
 
     def show_about_dialog(self):
         about = Adw.AboutWindow()
@@ -155,6 +172,8 @@ class MainWindow(Adw.ApplicationWindow):
     def update_ui_texts(self):
         """Atualiza todas as strings de tradução da aplicação quando a linguagem muda."""
         self.header_title.set_title(_("title"))
+        if hasattr(self, "reader_nav_page"):
+            self.reader_nav_page.set_title(_("title"))
         
         # Reconstrói popover do hambúrguer
         popover = self.menu_btn.get_popover()
@@ -181,6 +200,8 @@ class MainWindow(Adw.ApplicationWindow):
         
         # Repassa atualizações para os filhos
         self.reader_page.reload_ui_settings()
+        if hasattr(self, "settings_page") and self.settings_page is not None:
+            self.settings_page.update_ui_texts()
 
     def _load_and_update_settings(self):
         self._apply_theme_from_settings()
@@ -340,10 +361,10 @@ def main():
             except OSError:
                 sys.exit(0)
                 
-            if os.path.exists("/.flatpak-info"):
-                subprocess.run(["flatpak-spawn", "--host", "kill", "-USR1", str(pid)])
-            else:
+            try:
                 os.kill(pid, signal.SIGUSR1)
+            except OSError:
+                pass
             sys.exit(0)
             
         try:
@@ -370,7 +391,7 @@ def main():
             request = TTSRequest(text=text, voice=voice, engine=engine_type, speed=speed)
             result = generate_audio(request)
             if result.success:
-                proc = popen_on_host([
+                proc = popen_command([
                     "mpv",
                     "--no-video",
                     "--really-quiet",

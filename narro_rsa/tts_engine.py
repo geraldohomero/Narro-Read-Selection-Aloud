@@ -20,7 +20,7 @@ from .constants import (
     TMP_AUDIO_MP3,
     TMP_AUDIO_WAV,
 )
-from .subprocess_helper import run_on_host
+from .subprocess_helper import run_command
 from .text_formatter import format_text_for_tts
 
 
@@ -70,7 +70,7 @@ def _generate_with_edge_tts(text: str, voice: str) -> GenerationResult:
 
     edge_tts_bin = EDGE_TTS_BIN if os.path.exists(EDGE_TTS_BIN) else "edge-tts"
 
-    result = run_on_host(
+    result = run_command(
         [
             edge_tts_bin,
             "--text", text,
@@ -125,7 +125,7 @@ def _generate_with_piper(text: str, voice: str) -> GenerationResult:
     # Busca binário local; fallback para PATH
     piper_bin = PIPER_BIN if os.path.exists(PIPER_BIN) else "piper"
 
-    result = run_on_host(
+    result = run_command(
         [
             piper_bin,
             "--model", model_path,

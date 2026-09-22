@@ -7,12 +7,24 @@ evitando duplicação entre ler_texto.py e config_dialog.py.
 from __future__ import annotations
 
 import os
+import shutil
+
+def _resolve_binary(name: str, flatpak_path: str, fallback_path: str) -> str:
+    if os.path.exists(flatpak_path):
+        return flatpak_path
+    expanded = os.path.expanduser(fallback_path)
+    if os.path.exists(expanded):
+        return expanded
+    which = shutil.which(name)
+    if which:
+        return which
+    return name
 
 # ---------------------------------------------------------------------------
 # Caminhos de binários
 # ---------------------------------------------------------------------------
-EDGE_TTS_BIN: str = os.path.expanduser("~/.local/bin/edge-tts")
-PIPER_BIN: str = os.path.expanduser("~/.local/bin/piper")
+EDGE_TTS_BIN: str = _resolve_binary("edge-tts", "/app/bin/edge-tts", "~/.local/bin/edge-tts")
+PIPER_BIN: str = _resolve_binary("piper", "/app/bin/piper", "~/.local/bin/piper")
 
 # ---------------------------------------------------------------------------
 # Caminhos de runtime (preferência por XDG_RUNTIME_DIR com fallback /tmp)
