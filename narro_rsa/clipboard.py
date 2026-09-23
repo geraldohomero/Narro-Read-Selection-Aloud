@@ -10,20 +10,77 @@ import subprocess
 import time
 
 from .constants import LAST_CLIPBOARD_FILE, LAST_PRIMARY_FILE, LAST_READ_FILE
-from .subprocess_helper import run_command
+from .subprocess_helper import run_command, run_on_host
 
-# Mantém run_on_host como alias para compatibilidade com testes unitários
-run_on_host = run_command
+
+def _read_gdk_clipboard(primary: bool = False, timeout_ms: int = 350) -> str:
+    """Lê a área de transferência diretamente via GDK sem depender de ferramentas externas (Wayland e X11)."""
+    try:
+        import gi
+        if "Gtk" not in gi.Repository.get_default().get_loaded_namespaces():
+            gi.require_version("Gtk", "4.0")
+        from gi.repository import Gtk, Gdk, GLib
+
+        if not Gtk.is_initialized():
+            if not Gtk.init_check():
+                return ""
+
+        display = Gdk.Display.get_default()
+        if not display:
+            return ""
+
+        target = display.get_primary_clipboard() if primary else display.get_clipboard()
+        if not target:
+            return ""
+
+        result = [""]
+        loop = GLib.MainLoop()
+        is_done = [False]
+
+        def _on_done(clip, res):
+            try:
+                txt = clip.read_text_finish(res)
+                if txt:
+                    result[0] = txt.strip()
+            except Exception:
+                pass
+            finally:
+                is_done[0] = True
+                if loop.is_running():
+                    loop.quit()
+
+        timeout_id = GLib.timeout_add(timeout_ms, lambda: loop.quit() if loop.is_running() else None)
+        target.read_text_async(None, _on_done)
+        if not is_done[0]:
+            loop.run()
+
+        try:
+            GLib.source_remove(timeout_id)
+        except Exception:
+            pass
+
+        return result[0]
+    except Exception:
+        return ""
 
 
 def _read_tool(cmd: list[str]) -> str:
-    """Executa a ferramenta de clipboard e retorna stdout limpo, ou string vazia."""
+    """Executa a ferramenta de clipboard (tenta host e localmente conforme aplicável)."""
     try:
         res = run_on_host(cmd, capture_output=True, text=True, timeout=0.4)
         if res.returncode == 0 and res.stdout:
             return res.stdout.strip()
     except (subprocess.TimeoutExpired, OSError):
         pass
+
+    if os.path.exists("/.flatpak-info"):
+        try:
+            res = run_command(cmd, capture_output=True, text=True, timeout=0.4)
+            if res.returncode == 0 and res.stdout:
+                return res.stdout.strip()
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+
     return ""
 
 
@@ -34,6 +91,10 @@ def _is_wayland_session() -> bool:
 
 def _get_raw_clipboard() -> str:
     """Captura o texto da área de transferência padrão (Ctrl+C)."""
+    txt = _read_gdk_clipboard(primary=False)
+    if txt:
+        return txt
+
     if _is_wayland_session():
         txt = _read_tool(["wl-paste", "--no-newline"])
         if txt:
@@ -50,6 +111,10 @@ def _get_raw_clipboard() -> str:
 
 def _get_raw_primary() -> str:
     """Captura o texto da seleção primária (texto destacado pelo mouse)."""
+    txt = _read_gdk_clipboard(primary=True)
+    if txt:
+        return txt
+
     if _is_wayland_session():
         txt = _read_tool(["wl-paste", "--primary", "--no-newline"])
         if txt:

@@ -282,7 +282,7 @@ def configure_gnome_shortcuts(force: bool = False):
     import re
     from narro_rsa.constants import CONFIG_DIR
 
-    marker_file = os.path.join(CONFIG_DIR, ".shortcuts_configured_v2")
+    marker_file = os.path.join(CONFIG_DIR, ".shortcuts_configured_v3")
     if not force and os.path.exists(marker_file):
         return
 
@@ -292,12 +292,21 @@ def configure_gnome_shortcuts(force: bool = False):
         else:
             cmd = ["gsettings"] + args
         try:
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+            if res.returncode != 0:
+                if res.stderr:
+                    print(f"gsettings avisou ({args[:2]}): {res.stderr.strip()}")
+                return ""
             return res.stdout.strip()
-        except OSError:
+        except OSError as e:
+            print(f"Erro chamando gsettings: {e}")
             return ""
 
     bindings_str = run_gsettings(["get", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings"])
+    if not bindings_str and bindings_str != "@as []":
+        print("Não foi possível acessar as configurações de atalhos do GNOME.")
+        return
+
     if bindings_str == "@as []" or not bindings_str:
         current_bindings = []
     else:
@@ -312,7 +321,7 @@ def configure_gnome_shortcuts(force: bool = False):
         {
             "name": "Leitor TTS (Narro) [Ctrl+\\] [Flatpak]",
             "command": "flatpak run com.github.geraldohomero.NarroRsa --primary",
-            "binding": "<Primary>backslash"
+            "binding": "<Control>backslash"
         },
         {
             "name": "Pausar leitura TTS (Narro) [Flatpak]",
@@ -334,6 +343,7 @@ def configure_gnome_shortcuts(force: bool = False):
             continue
         new_bindings.append(path)
 
+    assigned = []
     for shortcut in desired_shortcuts:
         idx = 0
         while True:
@@ -341,15 +351,19 @@ def configure_gnome_shortcuts(force: bool = False):
             if path not in new_bindings:
                 break
             idx += 1
-        
+
         new_bindings.append(path)
+        assigned.append((path, shortcut))
+
+    array_val = "[" + ", ".join([f"'{p}'" for p in new_bindings]) + "]"
+    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", array_val])
+
+    for path, shortcut in assigned:
         schema = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{path}"
         run_gsettings(["set", schema, "name", shortcut["name"]])
         run_gsettings(["set", schema, "command", shortcut["command"]])
         run_gsettings(["set", schema, "binding", shortcut["binding"]])
 
-    array_val = "[" + ", ".join([f"'{p}'" for p in new_bindings]) + "]"
-    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", array_val])
     try:
         os.makedirs(CONFIG_DIR, exist_ok=True)
         with open(marker_file, "w", encoding="utf-8") as fh:

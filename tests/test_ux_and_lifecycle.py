@@ -54,7 +54,7 @@ class TestMainWindowMethods(unittest.TestCase):
     def test_configure_gnome_shortcuts_cached(self):
         from main_window import configure_gnome_shortcuts
         with tempfile.TemporaryDirectory() as tmp_config:
-            marker = os.path.join(tmp_config, ".shortcuts_configured_v2")
+            marker = os.path.join(tmp_config, ".shortcuts_configured_v3")
             with open(marker, "w") as f:
                 f.write("configured")
             with patch("narro_rsa.constants.CONFIG_DIR", tmp_config):
