@@ -19,7 +19,7 @@ run_on_host = run_command
 def _read_tool(cmd: list[str]) -> str:
     """Executa a ferramenta de clipboard e retorna stdout limpo, ou string vazia."""
     try:
-        res = run_on_host(cmd, capture_output=True, text=True, timeout=2)
+        res = run_on_host(cmd, capture_output=True, text=True, timeout=0.4)
         if res.returncode == 0 and res.stdout:
             return res.stdout.strip()
     except (subprocess.TimeoutExpired, OSError):
@@ -39,15 +39,11 @@ def _get_raw_clipboard() -> str:
         if txt:
             return txt
 
-    for cmd in (["xclip", "-o", "-selection", "clipboard"], ["xsel", "-b", "-o"]):
-        txt = _read_tool(cmd)
-        if txt:
-            return txt
-
-    if not _is_wayland_session():
-        txt = _read_tool(["wl-paste", "--no-newline"])
-        if txt:
-            return txt
+    if not _is_wayland_session() or os.environ.get("DISPLAY"):
+        for cmd in (["xclip", "-o", "-selection", "clipboard"], ["xsel", "-b", "-o"]):
+            txt = _read_tool(cmd)
+            if txt:
+                return txt
 
     return ""
 
@@ -59,15 +55,11 @@ def _get_raw_primary() -> str:
         if txt:
             return txt
 
-    for cmd in (["xclip", "-o", "-selection", "primary"], ["xsel", "-p", "-o"]):
-        txt = _read_tool(cmd)
-        if txt:
-            return txt
-
-    if not _is_wayland_session():
-        txt = _read_tool(["wl-paste", "--primary", "--no-newline"])
-        if txt:
-            return txt
+    if not _is_wayland_session() or os.environ.get("DISPLAY"):
+        for cmd in (["xclip", "-o", "-selection", "primary"], ["xsel", "-p", "-o"]):
+            txt = _read_tool(cmd)
+            if txt:
+                return txt
 
     return ""
 

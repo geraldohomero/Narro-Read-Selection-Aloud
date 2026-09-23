@@ -61,6 +61,7 @@ TRANSLATIONS = {
         "search_placeholder": "Search...",
         "search_label": "Search:",
         "no_text": "Clipboard is empty. Copy some text...",
+        "no_text_toast": "Clipboard is empty. Copy or type some text to read.",
         "about": "About Narro-RSA",
         "about_comments": "A modern Neural Text-to-Speech reader for GNOME",
     },
@@ -121,6 +122,7 @@ TRANSLATIONS = {
         "search_placeholder": "Buscar...",
         "search_label": "Buscar:",
         "no_text": "A área de transferência está vazia. Copie algum texto...",
+        "no_text_toast": "A área de transferência está vazia. Copie ou digite algum texto para ler.",
         "about": "Sobre o Narro-RSA",
         "about_comments": "Um leitor moderno de texto para voz neural para o GNOME",
     },
@@ -181,6 +183,7 @@ TRANSLATIONS = {
         "search_placeholder": "搜索...",
         "search_label": "搜索:",
         "no_text": "剪贴板为空。请复制一些文本...",
+        "no_text_toast": "剪贴板为空。请复制或输入一些文本以进行朗读。",
         "about": "关于 Narro-RSA",
         "about_comments": "适用于 GNOME 的现代神经网络语音朗读工具",
     }

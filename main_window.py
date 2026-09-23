@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 import gi
 
 gi.require_version("Gdk", "4.0")
@@ -28,7 +29,7 @@ from narro_rsa.constants import (
     SPEED_DEFAULT,
 )
 from narro_rsa.settings import load_settings, save_settings
-from narro_rsa.mpv_control import kill_mpv, send_mpv_command
+from narro_rsa.mpv_control import kill_mpv, send_mpv_command, is_mpv_active
 from narro_rsa.tts_engine import EngineType, TTSRequest, generate_audio
 from narro_rsa.subprocess_helper import popen_command, check_pid_active, check_and_start_daemon
 from narro_rsa.translations import _
@@ -108,9 +109,20 @@ class MainWindow(Adw.ApplicationWindow):
         # Inicializa a página de configurações integrada
         self.settings_page = SettingsPage(self)
 
-        self.set_content(self.navigation_view)
+        self.toast_overlay = Adw.ToastOverlay()
+        self.toast_overlay.set_child(self.navigation_view)
+        self.set_content(self.toast_overlay)
+
+        self._is_handling_active = False
+        self._last_active_time = 0.0
 
         self.connect("notify::is-active", self._on_window_active)
+
+    def show_toast(self, message: str, timeout: int = 3):
+        """Exibe uma notificação flutuante (toast) nativa do GNOME/Adwaita."""
+        toast = Adw.Toast.new(message)
+        toast.set_timeout(timeout)
+        self.toast_overlay.add_toast(toast)
 
     def _apply_css(self):
         css_provider = Gtk.CssProvider()
@@ -208,39 +220,46 @@ class MainWindow(Adw.ApplicationWindow):
         self.reader_page.reload_ui_settings()
 
     def _on_window_active(self, window, pspec):
-        if window.get_property("is-active"):
+        if not window.get_property("is-active"):
+            return
+
+        # Proteção contra reentrância de eventos
+        if getattr(self, "_is_handling_active", False):
+            return
+        self._is_handling_active = True
+
+        try:
+            now = time.time()
+            # Throttling / debounce de 0.5s para evitar storms de eventos do compositor Wayland
+            if now - getattr(self, "_last_active_time", 0.0) < 0.5:
+                return
+            self._last_active_time = now
+
             self._load_and_update_settings()
-            
+
             # Sincroniza com áudio ou clipboard ativo se necessário
-            if hasattr(self.reader_page, "text_view"):
-                from narro_rsa.constants import MPV_SOCKET
+            if hasattr(self, "reader_page") and hasattr(self.reader_page, "text_view"):
                 buffer = self.reader_page.text_view.get_buffer()
                 start, end = buffer.get_bounds()
                 current_text = buffer.get_text(start, end, True).strip()
-                
-                if os.path.exists(MPV_SOCKET):
+
+                # Se o áudio está tocando e há texto recente ativo, sincroniza
+                if is_mpv_active() and os.path.exists(LAST_READ_FILE):
                     try:
-                        if os.path.exists(LAST_READ_FILE):
-                            with open(LAST_READ_FILE, "r", encoding="utf-8") as fh:
-                                active_text = fh.read().strip()
-                            if active_text and active_text != current_text:
-                                buffer.set_text(active_text)
-                                return
+                        with open(LAST_READ_FILE, "r", encoding="utf-8") as fh:
+                            active_text = fh.read().strip()
+                        if active_text and active_text != current_text:
+                            buffer.set_text(active_text)
+                            return
                     except OSError:
                         pass
 
+                # Se o campo está vazio ou com o aviso, carrega assincronamente via GDK (sem subprocessos)
                 if current_text == _("no_text") or not current_text:
-                    initial_text = ""
-                    if os.path.exists(LAST_READ_FILE):
-                        try:
-                            with open(LAST_READ_FILE, "r", encoding="utf-8") as fh:
-                                initial_text = fh.read().strip()
-                        except OSError:
-                            pass
-                    if not initial_text:
-                        initial_text = get_clipboard_text()
-                    if initial_text:
-                        buffer.set_text(initial_text)
+                    if hasattr(self.reader_page, "load_clipboard_async"):
+                        self.reader_page.load_clipboard_async()
+        finally:
+            self._is_handling_active = False
 
 
 # ============================================================================
@@ -258,10 +277,15 @@ class NarroApp(Adw.Application):
             win.show_settings_page()
 
 
-def configure_gnome_shortcuts():
+def configure_gnome_shortcuts(force: bool = False):
     """Configura os atalhos de teclado customizados no GNOME via gsettings."""
     import re
-    
+    from narro_rsa.constants import CONFIG_DIR
+
+    marker_file = os.path.join(CONFIG_DIR, ".shortcuts_configured_v2")
+    if not force and os.path.exists(marker_file):
+        return
+
     def run_gsettings(args):
         if os.path.exists("/.flatpak-info"):
             cmd = ["flatpak-spawn", "--host", "gsettings"] + args
@@ -326,12 +350,18 @@ def configure_gnome_shortcuts():
 
     array_val = "[" + ", ".join([f"'{p}'" for p in new_bindings]) + "]"
     run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", array_val])
+    try:
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        with open(marker_file, "w", encoding="utf-8") as fh:
+            fh.write("configured")
+    except OSError:
+        pass
     print("Atalhos do GNOME configurados com sucesso para usar o Flatpak!")
 
 
 def main():
     if "--setup-shortcuts" in sys.argv:
-        configure_gnome_shortcuts()
+        configure_gnome_shortcuts(force=True)
         sys.exit(0)
 
     if "--play" in sys.argv or "--primary" in sys.argv:
@@ -413,9 +443,9 @@ def main():
         sys.exit(0)
 
     try:
-        configure_gnome_shortcuts()
+        threading.Thread(target=configure_gnome_shortcuts, daemon=True).start()
     except Exception as e:
-        print(f"Erro configurando atalhos: {e}")
+        print(f"Erro iniciando thread de atalhos: {e}")
 
     app = NarroApp()
     sys.exit(app.run([sys.argv[0]]))

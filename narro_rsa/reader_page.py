@@ -13,7 +13,6 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gdk, GLib, Gtk, Adw
 
-from narro_rsa.clipboard import get_clipboard_text
 from narro_rsa.constants import (
     LOCKFILE,
     TMP_TEXT_FILE,
@@ -67,19 +66,33 @@ class ReaderPage(Gtk.Box):
         scrolled.set_child(self.text_view)
         self.append(scrolled)
 
-        # Carrega texto inicial (do arquivo temporário da leitura ativa, ou do clipboard)
+        self.focus_controller = Gtk.EventControllerFocus.new()
+        self.focus_controller.connect("enter", self._on_text_view_focus_enter)
+        self.focus_controller.connect("leave", self._on_text_view_focus_leave)
+        self.text_view.add_controller(self.focus_controller)
+
+        # Carrega texto inicial (do áudio ativo ou do último texto lido)
         initial_text = ""
-        if os.path.exists(LAST_READ_FILE):
+        from narro_rsa.mpv_control import is_mpv_active
+        if is_mpv_active() and os.path.exists(LAST_READ_FILE):
+            try:
+                with open(LAST_READ_FILE, "r", encoding="utf-8") as fh:
+                    initial_text = fh.read().strip()
+            except OSError:
+                pass
+        if not initial_text and os.path.exists(LAST_READ_FILE):
             try:
                 with open(LAST_READ_FILE, "r", encoding="utf-8") as fh:
                     initial_text = fh.read().strip()
             except OSError:
                 pass
         if not initial_text:
-            initial_text = get_clipboard_text()
-        if not initial_text:
             initial_text = _("no_text")
         self.text_view.get_buffer().set_text(initial_text)
+
+        # Se não havia texto salvo recente, tenta ler o clipboard de forma assíncrona
+        if initial_text == _("no_text"):
+            self.load_clipboard_async()
 
         # Rótulo da Voz Ativa
         self.active_voice_lbl = Gtk.Label()
@@ -159,9 +172,69 @@ class ReaderPage(Gtk.Box):
         save_settings(speed=speed)
         send_mpv_command(["set_property", "speed", speed])
 
+    def _on_text_view_focus_enter(self, controller):
+        """Ao focar no campo de texto, limpa a instrução se o usuário ainda não digitou nada."""
+        buffer = self.text_view.get_buffer()
+        start, end = buffer.get_bounds()
+        text = buffer.get_text(start, end, True).strip()
+        if text == _("no_text"):
+            buffer.set_text("")
+
+    def _on_text_view_focus_leave(self, controller):
+        """Ao perder o foco, restaura a instrução se o campo ficou em branco."""
+        buffer = self.text_view.get_buffer()
+        start, end = buffer.get_bounds()
+        text = buffer.get_text(start, end, True).strip()
+        if not text:
+            buffer.set_text(_("no_text"))
+
+    def load_clipboard_async(self):
+        """Lê a área de transferência de forma 100% assíncrona e não-bloqueante via GDK."""
+        display = Gdk.Display.get_default()
+        if not display:
+            return
+
+        clip = display.get_clipboard()
+        prim = display.get_primary_clipboard()
+
+        def _apply_text(text: str):
+            if not text or not text.strip():
+                return
+            cleaned = text.strip()
+            if hasattr(self, "text_view"):
+                buffer = self.text_view.get_buffer()
+                start, end = buffer.get_bounds()
+                current = buffer.get_text(start, end, True).strip()
+                if current == _("no_text") or not current:
+                    buffer.set_text(cleaned)
+
+        def _on_prim_done(p, res):
+            try:
+                t = p.read_text_finish(res)
+                if t and t.strip():
+                    _apply_text(t)
+            except Exception:
+                pass
+
+        def _on_clip_done(c, res):
+            try:
+                t = c.read_text_finish(res)
+                if t and t.strip():
+                    _apply_text(t)
+                elif prim:
+                    prim.read_text_async(None, _on_prim_done)
+            except Exception:
+                if prim:
+                    prim.read_text_async(None, _on_prim_done)
+
+        if clip:
+            clip.read_text_async(None, _on_clip_done)
+        elif prim:
+            prim.read_text_async(None, _on_prim_done)
+
     def _generate_and_play_local(self, text, voice, speed, engine_name):
+        from narro_rsa.constants import MPV_SOCKET
         try:
-            from narro_rsa.constants import MPV_SOCKET
             try:
                 os.unlink(MPV_SOCKET)
             except OSError:
@@ -185,6 +258,12 @@ class ReaderPage(Gtk.Box):
             self._mpv_process.wait()
         except Exception as e:
             print(f"Erro local: {e}")
+        finally:
+            try:
+                if os.path.exists(MPV_SOCKET):
+                    os.unlink(MPV_SOCKET)
+            except OSError:
+                pass
 
     def _on_play_clicked(self, btn):
         """Salva o texto e envia sinal para ler, ou reproduz localmente se o daemon não estiver ativo."""
@@ -193,6 +272,8 @@ class ReaderPage(Gtk.Box):
         text = buffer.get_text(start, end, True).strip()
 
         if not text or text == _("no_text"):
+            if hasattr(self.main_window, "show_toast"):
+                self.main_window.show_toast(_("no_text_toast"))
             return
 
         # Escreve o texto ouvido em LAST_READ_FILE
@@ -217,6 +298,8 @@ class ReaderPage(Gtk.Box):
         if daemon_active and pid:
             try:
                 with open(TMP_TEXT_FILE, "w", encoding="utf-8") as fh:
+                    fh.write(text)
+                with open(LAST_READ_FILE, "w", encoding="utf-8") as fh:
                     fh.write(text)
             except OSError:
                 return
