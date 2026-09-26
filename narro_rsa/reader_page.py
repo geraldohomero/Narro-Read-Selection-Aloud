@@ -234,6 +234,8 @@ class ReaderPage(Gtk.Box):
 
     def _generate_and_play_local(self, text, voice, speed, engine_name):
         from narro_rsa.constants import MPV_SOCKET
+        from narro_rsa.mpris import MPRISService
+        from narro_rsa.notifications import preview_text
         try:
             try:
                 os.unlink(MPV_SOCKET)
@@ -245,8 +247,24 @@ class ReaderPage(Gtk.Box):
             result = generate_audio(request)
             
             if not result.success:
+                err = result.error_message or "Erro desconhecido"
+                if hasattr(self, "main_window") and hasattr(self.main_window, "show_toast"):
+                    GLib.idle_add(self.main_window.show_toast, _("toast_playback_error", error=err))
                 return
+
+            if hasattr(self, "main_window") and hasattr(self.main_window, "show_toast"):
+                GLib.idle_add(self.main_window.show_toast, _("notify_reading"))
                 
+            preview = preview_text(text, max_chars=80)
+            self._mpris = MPRISService(
+                on_play=lambda: send_mpv_command(["set_property", "pause", False]),
+                on_pause=lambda: send_mpv_command(["set_property", "pause", True]),
+                on_play_pause=lambda: send_mpv_command(["cycle", "pause"]),
+                on_stop=lambda: kill_mpv(),
+                on_raise=lambda: GLib.idle_add(self.main_window.present) if hasattr(self, "main_window") else None,
+            )
+            self._mpris.publish(title=preview, text=text, speed=speed)
+
             self._mpv_process = popen_command([
                 "mpv",
                 "--no-video",
@@ -255,10 +273,29 @@ class ReaderPage(Gtk.Box):
                 f"--speed={speed}",
                 result.audio_path
             ])
+
+            def _poll_gui_mpv():
+                if not self._mpv_process or self._mpv_process.poll() is not None:
+                    if hasattr(self, "_mpris") and self._mpris:
+                        self._mpris.unpublish()
+                    return False
+                res = send_mpv_command(["get_property", "pause"])
+                if isinstance(res, dict) and "data" in res and hasattr(self, "_mpris") and self._mpris:
+                    is_paused = bool(res["data"])
+                    curr_status = self._mpris.playback_status
+                    if is_paused and curr_status != "Paused":
+                        self._mpris.set_playback_status("Paused")
+                    elif not is_paused and curr_status != "Playing":
+                        self._mpris.set_playback_status("Playing")
+                return True
+
+            GLib.idle_add(lambda: GLib.timeout_add(250, _poll_gui_mpv))
             self._mpv_process.wait()
         except Exception as e:
             print(f"Erro local: {e}")
         finally:
+            if hasattr(self, "_mpris") and self._mpris:
+                self._mpris.unpublish()
             try:
                 if os.path.exists(MPV_SOCKET):
                     os.unlink(MPV_SOCKET)
@@ -332,3 +369,5 @@ class ReaderPage(Gtk.Box):
     def _on_stop_clicked(self, btn):
         """Para a reprodução completamente."""
         kill_mpv()
+        if hasattr(self, "_mpris") and self._mpris:
+            self._mpris.unpublish()

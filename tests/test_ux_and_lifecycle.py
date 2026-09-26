@@ -54,7 +54,7 @@ class TestMainWindowMethods(unittest.TestCase):
     def test_configure_gnome_shortcuts_cached(self):
         from main_window import configure_gnome_shortcuts
         with tempfile.TemporaryDirectory() as tmp_config:
-            marker = os.path.join(tmp_config, ".shortcuts_configured_v3")
+            marker = os.path.join(tmp_config, ".shortcuts_configured_v4")
             with open(marker, "w") as f:
                 f.write("configured")
             with patch("narro_rsa.constants.CONFIG_DIR", tmp_config):
@@ -108,6 +108,23 @@ class TestMainWindowMethods(unittest.TestCase):
             MainWindow._on_window_active(mock_win, mock_gobj_win, None)
             mock_win._load_and_update_settings.assert_called_once()
             mock_win.reader_page.load_clipboard_async.assert_called_once()
+
+
+class TestReaderPageFeedback(unittest.TestCase):
+    def test_generate_and_play_local_error_shows_toast(self):
+        from narro_rsa.reader_page import ReaderPage
+        from narro_rsa.tts_engine import GenerationResult
+        mock_win = MagicMock()
+        mock_page = MagicMock(spec=ReaderPage)
+        mock_page.main_window = mock_win
+
+        failed_res = GenerationResult(success=False, audio_path="", engine_name="piper", error_message="Model file missing")
+        with patch("narro_rsa.reader_page.generate_audio", return_value=failed_res):
+            with patch("gi.repository.GLib.idle_add") as mock_idle:
+                ReaderPage._generate_and_play_local(mock_page, "Hello text", "voice1", 1.0, "piper")
+                mock_idle.assert_called_once()
+                fn = mock_idle.call_args[0][0]
+                self.assertEqual(fn, mock_win.show_toast)
 
 
 if __name__ == "__main__":

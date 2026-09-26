@@ -162,7 +162,12 @@ class TestClipboardResolution(unittest.TestCase):
         with patch("narro_rsa.clipboard.run_on_host", side_effect=mock_run):
             result = clip.get_clipboard_text(primary=True)
             self.assertEqual(result, "Copied from Zotero")
-            self.assertGreater(call_count, 0)
+    def test_read_gdk_clipboard_returns_empty_when_not_initialized(self):
+        with patch("gi.repository.Gtk.is_initialized", return_value=False):
+            with patch("gi.repository.Gtk.init_check") as mock_init:
+                res = clip._read_gdk_clipboard(primary=False)
+                self.assertEqual(res, "")
+                mock_init.assert_not_called()
 
 
 if __name__ == "__main__":

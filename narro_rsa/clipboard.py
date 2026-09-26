@@ -22,8 +22,7 @@ def _read_gdk_clipboard(primary: bool = False, timeout_ms: int = 350) -> str:
         from gi.repository import Gtk, Gdk, GLib
 
         if not Gtk.is_initialized():
-            if not Gtk.init_check():
-                return ""
+            return ""
 
         display = Gdk.Display.get_default()
         if not display:

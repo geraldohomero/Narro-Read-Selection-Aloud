@@ -64,6 +64,13 @@ TRANSLATIONS = {
         "no_text_toast": "Clipboard is empty. Copy or type some text to read.",
         "about": "About Narro-RSA",
         "about_comments": "A modern Neural Text-to-Speech reader for GNOME",
+        "notify_reading": "Reading selection...",
+        "notify_no_text": "Clipboard is empty. Copy or select some text first.",
+        "notify_paused": "Playback paused",
+        "notify_resumed": "Playback resumed",
+        "notify_stopped": "Playback stopped",
+        "toast_generating": "Generating audio...",
+        "toast_playback_error": "Error generating audio: {error}",
     },
     "pt_BR": {
         "title": "Narro-RSA",
@@ -125,6 +132,13 @@ TRANSLATIONS = {
         "no_text_toast": "A área de transferência está vazia. Copie ou digite algum texto para ler.",
         "about": "Sobre o Narro-RSA",
         "about_comments": "Um leitor moderno de texto para voz neural para o GNOME",
+        "notify_reading": "Lendo seleção...",
+        "notify_no_text": "Área de transferência vazia. Copie ou selecione um texto primeiro.",
+        "notify_paused": "Reprodução pausada",
+        "notify_resumed": "Reprodução retomada",
+        "notify_stopped": "Reprodução parada",
+        "toast_generating": "Gerando áudio...",
+        "toast_playback_error": "Erro ao gerar áudio: {error}",
     },
     "zh_CN": {
         "title": "Narro-RSA",
@@ -186,6 +200,13 @@ TRANSLATIONS = {
         "no_text_toast": "剪贴板为空。请复制或输入一些文本以进行朗读。",
         "about": "关于 Narro-RSA",
         "about_comments": "适用于 GNOME 的现代神经网络语音朗读工具",
+        "notify_reading": "正在朗读选中文本...",
+        "notify_no_text": "剪贴板为空。请先复制或选择文本。",
+        "notify_paused": "已暂停朗读",
+        "notify_resumed": "已继续朗读",
+        "notify_stopped": "已停止朗读",
+        "toast_generating": "正在生成音频...",
+        "toast_playback_error": "生成音频错误: {error}",
     }
 }
 

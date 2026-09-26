@@ -33,6 +33,7 @@ from narro_rsa.mpv_control import kill_mpv, send_mpv_command, is_mpv_active
 from narro_rsa.tts_engine import EngineType, TTSRequest, generate_audio
 from narro_rsa.subprocess_helper import popen_command, check_pid_active, check_and_start_daemon
 from narro_rsa.translations import _
+from narro_rsa.notifications import send_notification, preview_text
 
 from narro_rsa.reader_page import ReaderPage
 from narro_rsa.settings_page import SettingsPage
@@ -282,15 +283,17 @@ def configure_gnome_shortcuts(force: bool = False):
     import re
     from narro_rsa.constants import CONFIG_DIR
 
-    marker_file = os.path.join(CONFIG_DIR, ".shortcuts_configured_v3")
+    marker_file = os.path.join(CONFIG_DIR, ".shortcuts_configured_v4")
     if not force and os.path.exists(marker_file):
         return
 
     def run_gsettings(args):
+        gsettings_cmd = "/usr/bin/gsettings"
         if os.path.exists("/.flatpak-info"):
-            cmd = ["flatpak-spawn", "--host", "gsettings"] + args
+            cmd = ["flatpak-spawn", "--host", gsettings_cmd] + args
         else:
-            cmd = ["gsettings"] + args
+            bin_path = gsettings_cmd if os.path.exists(gsettings_cmd) else "gsettings"
+            cmd = [bin_path] + args
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
             if res.returncode != 0:
@@ -383,6 +386,7 @@ def main():
         use_primary = "--primary" in sys.argv
         text = get_clipboard_text(primary=use_primary)
         if not text:
+            send_notification("Narro-RSA", _("notify_no_text"), icon="dialog-warning")
             sys.exit(0)
             
         daemon_active = False
@@ -423,6 +427,9 @@ def main():
         voice = settings.get("voice") or default_voice
         speed = float(settings.get("speed", SPEED_DEFAULT))
         
+        preview = preview_text(text, max_chars=80)
+        send_notification("Narro-RSA", f"{_('notify_reading')}\n\"{preview}\"", icon="media-playback-start-symbolic")
+
         kill_mpv()
         try:
             from narro_rsa.constants import MPV_SOCKET
@@ -444,16 +451,86 @@ def main():
                     result.audio_path
                 ])
                 proc.wait()
+
+                from narro_rsa.mpris import MPRISService
+
+                def _on_play():
+                    send_mpv_command(["set_property", "pause", False])
+
+                def _on_pause():
+                    send_mpv_command(["set_property", "pause", True])
+
+                def _on_play_pause():
+                    send_mpv_command(["cycle", "pause"])
+
+                def _on_stop():
+                    kill_mpv()
+
+                mpris = MPRISService(
+                    on_play=_on_play,
+                    on_pause=_on_pause,
+                    on_play_pause=_on_play_pause,
+                    on_stop=_on_stop,
+                )
+                mpris.publish(title=preview, text=text, speed=speed)
+
+                loop = GLib.MainLoop()
+
+                def _check_mpv_status():
+                    if proc.poll() is not None:
+                        mpris.unpublish()
+                        loop.quit()
+                        return False
+
+                    res = send_mpv_command(["get_property", "pause"])
+                    if isinstance(res, dict) and "data" in res:
+                        is_paused = bool(res["data"])
+                        curr_status = mpris.playback_status
+                        if is_paused and curr_status != "Paused":
+                            mpris.set_playback_status("Paused")
+                        elif not is_paused and curr_status != "Playing":
+                            mpris.set_playback_status("Playing")
+
+                    return True
+
+                GLib.timeout_add(250, _check_mpv_status)
+
+                def _on_sig(*_):
+                    kill_mpv()
+                    mpris.unpublish()
+                    loop.quit()
+
+                signal.signal(signal.SIGINT, _on_sig)
+                signal.signal(signal.SIGTERM, _on_sig)
+
+                try:
+                    loop.run()
+                finally:
+                    mpris.unpublish()
+                    kill_mpv()
+            else:
+                err = result.error_message or "Erro na síntese de voz"
+                send_notification("Narro-RSA", _("toast_playback_error", error=err), icon="dialog-error")
         except Exception as e:
             print(f"Erro na leitura em background: {e}")
+            send_notification("Narro-RSA", _("toast_playback_error", error=str(e)), icon="dialog-error")
         sys.exit(0)
 
     if "--pause" in sys.argv:
+        res = send_mpv_command(["get_property", "pause"])
+        is_paused = res.get("data", False) if isinstance(res, dict) else False
         send_mpv_command(["cycle", "pause"])
+        if is_paused:
+            send_notification("Narro-RSA", _("notify_resumed"), icon="media-playback-start-symbolic")
+        else:
+            send_notification("Narro-RSA", _("notify_paused"), icon="media-playback-pause-symbolic")
         sys.exit(0)
         
     if "--stop" in sys.argv:
+        was_active = is_mpv_active()
         kill_mpv()
+        if was_active:
+            send_notification("Narro-RSA", _("notify_stopped"), icon="media-playback-stop-symbolic")
         sys.exit(0)
 
     try:

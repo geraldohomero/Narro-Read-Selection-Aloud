@@ -16,6 +16,7 @@ finish-args:
   - --filesystem=xdg-run/narro-rsa:create
   - --filesystem=xdg-config/narro-rsa:create
   - --own-name=com.github.geraldohomero.NarroRsa
+  - --own-name=org.mpris.MediaPlayer2.com.github.geraldohomero.NarroRsa
 
 build-options:
   build-args:
