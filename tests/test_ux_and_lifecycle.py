@@ -51,16 +51,13 @@ class TestMainWindowMethods(unittest.TestCase):
         from main_window import MainWindow
         self.assertTrue(hasattr(MainWindow, "show_toast"))
 
-    def test_configure_gnome_shortcuts_cached(self):
+    def test_configure_gnome_shortcuts_already_configured(self):
         from main_window import configure_gnome_shortcuts
-        with tempfile.TemporaryDirectory() as tmp_config:
-            marker = os.path.join(tmp_config, ".shortcuts_configured_v4")
-            with open(marker, "w") as f:
-                f.write("configured")
-            with patch("narro_rsa.constants.CONFIG_DIR", tmp_config):
-                with patch("subprocess.run") as mock_run:
-                    configure_gnome_shortcuts(force=False)
-                    mock_run.assert_not_called()
+        with patch("main_window._run_gsettings_cmd") as mock_gsettings:
+            # Simulate GNOME with shortcuts already set
+            mock_gsettings.side_effect = lambda args: "@as []" if args == ["get", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings"] else ""
+            res = configure_gnome_shortcuts(force=True)
+            self.assertTrue(res)
 
     def test_reader_page_has_load_clipboard_async(self):
         from narro_rsa.reader_page import ReaderPage

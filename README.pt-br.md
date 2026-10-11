@@ -24,27 +24,26 @@ Selecione texto em qualquer aplicativo, copie com Ctrl+C, e use um atalho de tec
 
 ---
 
-## Opções de Instalação
+## Instalação (Flatpak)
 
-### Opção 1: Flatpak (Recomendado e Autossuficiente)
+A aplicação é distribuída e empacotada exclusivamente via Flatpak.
 
-A instalação via Flatpak é a mais simples. Ela empacota todas as dependências em uma sandbox, não requer configuração manual no host e configura os atalhos de teclado no GNOME automaticamente.
-
-#### 1. Instale o pacote Flatpak:
+### 1. Instale o pacote Flatpak:
 ```bash
 flatpak install --user ./com.github.geraldohomero.NarroRsa.flatpak
 ```
-*Ou compile diretamente do manifesto:*
+*Ou compile diretamente do manifesto se estiver desenvolvendo:*
 ```bash
 flatpak-builder --user --install --force-clean --disable-rofiles-fuse build-dir com.github.geraldohomero.NarroRsa.yaml
 ```
 
-#### 2. Execute a aplicação:
+### 2. Execute a aplicação:
+Abra o **Narro-RSA** pelo menu de aplicativos do seu sistema ou execute no terminal:
 ```bash
 flatpak run com.github.geraldohomero.NarroRsa
 ```
 
-*(No primeiro início da interface, os atalhos de teclado personalizados no GNOME serão criados automaticamente direcionados para o Flatpak!)*
+> **Atalhos Automáticos:** No primeiro início, o Narro-RSA detecta e registra automaticamente todos os atalhos de teclado personalizados no GNOME (`Ctrl+\`, `Super+Alt+L`, etc.), sem necessidade de configuração manual. Você também pode verificar ou reconfigurá-los a qualquer momento em **Configurações → Atalhos de Teclado no GNOME**.
 
 ---
 

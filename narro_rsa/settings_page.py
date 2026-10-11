@@ -317,6 +317,46 @@ class SettingsPage(Adw.NavigationPage):
         self.info_label.set_halign(Gtk.Align.START)
         self.piper_box.append(self.info_label)
 
+        # Grupo de Atalhos de Teclado no GNOME
+        self.group_shortcuts = Adw.PreferencesGroup()
+        self.page_general.add(self.group_shortcuts)
+
+        def _make_key_badge(text: str):
+            lbl = Gtk.Label(label=text)
+            lbl.add_css_class("heading")
+            lbl.add_css_class("dim-label")
+            lbl.set_valign(Gtk.Align.CENTER)
+            return lbl
+
+        self.shortcut_row_primary = Adw.ActionRow()
+        self.shortcut_row_primary.set_subtitle("flatpak run com.github.geraldohomero.NarroRsa --primary")
+        self.shortcut_row_primary.add_suffix(_make_key_badge("<Control>backslash"))
+        self.group_shortcuts.add(self.shortcut_row_primary)
+
+        self.shortcut_row_clipboard = Adw.ActionRow()
+        self.shortcut_row_clipboard.set_subtitle("flatpak run com.github.geraldohomero.NarroRsa --play")
+        self.shortcut_row_clipboard.add_suffix(_make_key_badge("<Super><Alt>l"))
+        self.group_shortcuts.add(self.shortcut_row_clipboard)
+
+        self.shortcut_row_pause = Adw.ActionRow()
+        self.shortcut_row_pause.set_subtitle("flatpak run com.github.geraldohomero.NarroRsa --pause")
+        self.shortcut_row_pause.add_suffix(_make_key_badge("<Super><Alt>j"))
+        self.group_shortcuts.add(self.shortcut_row_pause)
+
+        self.shortcut_row_stop = Adw.ActionRow()
+        self.shortcut_row_stop.set_subtitle("flatpak run com.github.geraldohomero.NarroRsa --stop")
+        self.shortcut_row_stop.add_suffix(_make_key_badge("<Super><Alt>k"))
+        self.group_shortcuts.add(self.shortcut_row_stop)
+
+        self.reconfigure_shortcuts_btn = Gtk.Button()
+        self.reconfigure_shortcuts_btn.set_valign(Gtk.Align.CENTER)
+        self.reconfigure_shortcuts_btn.add_css_class("suggested-action")
+        self.reconfigure_shortcuts_btn.connect("clicked", self._on_reconfigure_shortcuts_clicked)
+
+        self.reconfigure_shortcuts_row = Adw.ActionRow()
+        self.reconfigure_shortcuts_row.add_suffix(self.reconfigure_shortcuts_btn)
+        self.group_shortcuts.add(self.reconfigure_shortcuts_row)
+
     def _update_ui_texts(self):
         """Atualiza dinamicamente as strings da UI conforme o idioma da sessão."""
         self.set_title(_("settings"))
@@ -354,6 +394,28 @@ class SettingsPage(Adw.NavigationPage):
 
         # Atualiza rótulo de voz ativa
         self._update_current_selection_label()
+
+        # Atualiza textos da seção de atalhos
+        if hasattr(self, "group_shortcuts"):
+            self.group_shortcuts.set_title(_("shortcuts_group_title"))
+            self.group_shortcuts.set_description(_("shortcuts_group_desc"))
+            self.shortcut_row_primary.set_title(_("shortcut_primary_title"))
+            self.shortcut_row_clipboard.set_title(_("shortcut_clipboard_title"))
+            self.shortcut_row_pause.set_title(_("shortcut_pause_title"))
+            self.shortcut_row_stop.set_title(_("shortcut_stop_title"))
+            self.reconfigure_shortcuts_row.set_title(_("btn_reconfigure_shortcuts"))
+            self.reconfigure_shortcuts_btn.set_label(_("btn_reconfigure_shortcuts"))
+
+    def _on_reconfigure_shortcuts_clicked(self, btn):
+        btn.set_sensitive(False)
+        def _run():
+            from main_window import configure_gnome_shortcuts
+            configure_gnome_shortcuts(force=True)
+            GLib.idle_add(lambda: btn.set_sensitive(True))
+            if hasattr(self, "main_window") and hasattr(self.main_window, "show_toast"):
+                GLib.idle_add(lambda: self.main_window.show_toast(_("shortcuts_configured_success")))
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def update_ui_texts(self):
         """Método público para atualização das traduções da UI."""

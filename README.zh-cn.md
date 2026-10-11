@@ -24,27 +24,26 @@
 
 ---
 
-## 安装方式
+## 安装方式 (Flatpak)
 
-### 方案 1：Flatpak 安装（推荐，完全独立）
+本项目专为 Flatpak 平台打包与分发。
 
-使用 Flatpak 是最简便的安装方法。它将所有依赖项隔离打包在沙盒中，不需要在宿主机手动配置各种底层库，并在首次启动时自动写入 GNOME 键盘快捷键。
-
-#### 1. 安装 Flatpak 包：
+### 1. 安装 Flatpak 软件包：
 ```bash
 flatpak install --user ./com.github.geraldohomero.NarroRsa.flatpak
 ```
-*或直接从清单构建：*
+*或在开发时直接从清单构建：*
 ```bash
 flatpak-builder --user --install --force-clean --disable-rofiles-fuse build-dir com.github.geraldohomero.NarroRsa.yaml
 ```
 
-#### 2. 运行应用：
+### 2. 运行应用：
+从系统的应用程序启动器打开 **Narro-RSA**，或在终端中运行：
 ```bash
 flatpak run com.github.geraldohomero.NarroRsa
 ```
 
-*(在首次启动图形界面时，GNOME 自定义快捷键将自动创建并指向 Flatpak 命令！)*
+> **自动配置快捷键：** 在首次启动时，Narro-RSA 会自动检测并向 GNOME 注册所有对应的键盘快捷键（`Ctrl+\`、`Super+Alt+L` 等），完全无需手动设置。您也可以随时在 **设置 → GNOME 快捷键** 中查看或重新应用。
 
 ---
 

@@ -119,6 +119,14 @@ class MainWindow(Adw.ApplicationWindow):
 
         self.connect("notify::is-active", self._on_window_active)
 
+        # Verifica se os atalhos do GNOME estão configurados, configurando em background se necessário
+        def _setup_shortcuts_async():
+            changed = configure_gnome_shortcuts(force=False)
+            if changed:
+                GLib.idle_add(lambda: self.show_toast(_("shortcuts_configured_toast"), timeout=4))
+
+        threading.Thread(target=_setup_shortcuts_async, daemon=True).start()
+
     def show_toast(self, message: str, timeout: int = 3):
         """Exibe uma notificação flutuante (toast) nativa do GNOME/Adwaita."""
         toast = Adw.Toast.new(message)
@@ -278,37 +286,36 @@ class NarroApp(Adw.Application):
             win.show_settings_page()
 
 
-def configure_gnome_shortcuts(force: bool = False):
-    """Configura os atalhos de teclado customizados no GNOME via gsettings."""
-    import re
-    from narro_rsa.constants import CONFIG_DIR
-
-    marker_file = os.path.join(CONFIG_DIR, ".shortcuts_configured_v4")
-    if not force and os.path.exists(marker_file):
-        return
-
-    def run_gsettings(args):
-        gsettings_cmd = "/usr/bin/gsettings"
-        if os.path.exists("/.flatpak-info"):
-            cmd = ["flatpak-spawn", "--host", gsettings_cmd] + args
-        else:
-            bin_path = gsettings_cmd if os.path.exists(gsettings_cmd) else "gsettings"
-            cmd = [bin_path] + args
-        try:
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
-            if res.returncode != 0:
-                if res.stderr:
-                    print(f"gsettings avisou ({args[:2]}): {res.stderr.strip()}")
-                return ""
-            return res.stdout.strip()
-        except OSError as e:
-            print(f"Erro chamando gsettings: {e}")
+def _run_gsettings_cmd(args: list[str]) -> str:
+    """Executa um comando gsettings no host ou localmente."""
+    gsettings_cmd = "/usr/bin/gsettings"
+    if os.path.exists("/.flatpak-info"):
+        cmd = ["flatpak-spawn", "--host", gsettings_cmd] + args
+    else:
+        bin_path = gsettings_cmd if os.path.exists(gsettings_cmd) else "gsettings"
+        cmd = [bin_path] + args
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if res.returncode != 0:
             return ""
+        return res.stdout.strip()
+    except OSError:
+        return ""
 
-    bindings_str = run_gsettings(["get", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings"])
+
+def configure_gnome_shortcuts(force: bool = False) -> bool:
+    """Configura os atalhos de teclado customizados no GNOME via gsettings.
+    
+    Verifica diretamente no GNOME se os 4 atalhos estão configurados.
+    Se algum faltar ou se force=True, adiciona/atualiza os atalhos sem sobrepor outros apps.
+    Retorna True se atalhos foram configurados/atualizados, False se já estavam configurados.
+    """
+    import re
+
+    bindings_str = _run_gsettings_cmd(["get", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings"])
     if not bindings_str and bindings_str != "@as []":
         print("Não foi possível acessar as configurações de atalhos do GNOME.")
-        return
+        return False
 
     if bindings_str == "@as []" or not bindings_str:
         current_bindings = []
@@ -338,11 +345,32 @@ def configure_gnome_shortcuts(force: bool = False):
         }
     ]
 
+    # Se não for forçado, verifica se todos os atalhos já estão presentes e corretos
+    if not force:
+        existing_commands = {}
+        for path in current_bindings:
+            schema = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{path}"
+            cmd = _run_gsettings_cmd(["get", schema, "command"]).strip("'\" ")
+            binding = _run_gsettings_cmd(["get", schema, "binding"]).strip("'\" ")
+            if cmd:
+                existing_commands[cmd] = binding
+
+        all_present = True
+        for ds in desired_shortcuts:
+            cmd = ds["command"]
+            if cmd not in existing_commands or existing_commands[cmd] != ds["binding"]:
+                all_present = False
+                break
+        if all_present:
+            return False
+
+    # Filtra atalhos anteriores do Narro para evitar duplicações
     new_bindings = []
     for path in current_bindings:
         schema = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{path}"
-        name = run_gsettings(["get", schema, "name"])
-        if "Narro" in name:
+        name = _run_gsettings_cmd(["get", schema, "name"]).strip("'\" ")
+        cmd = _run_gsettings_cmd(["get", schema, "command"]).strip("'\" ")
+        if "Narro" in name or "com.github.geraldohomero.NarroRsa" in cmd:
             continue
         new_bindings.append(path)
 
@@ -359,21 +387,16 @@ def configure_gnome_shortcuts(force: bool = False):
         assigned.append((path, shortcut))
 
     array_val = "[" + ", ".join([f"'{p}'" for p in new_bindings]) + "]"
-    run_gsettings(["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", array_val])
+    _run_gsettings_cmd(["set", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings", array_val])
 
     for path, shortcut in assigned:
         schema = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{path}"
-        run_gsettings(["set", schema, "name", shortcut["name"]])
-        run_gsettings(["set", schema, "command", shortcut["command"]])
-        run_gsettings(["set", schema, "binding", shortcut["binding"]])
+        _run_gsettings_cmd(["set", schema, "name", shortcut["name"]])
+        _run_gsettings_cmd(["set", schema, "command", shortcut["command"]])
+        _run_gsettings_cmd(["set", schema, "binding", shortcut["binding"]])
 
-    try:
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(marker_file, "w", encoding="utf-8") as fh:
-            fh.write("configured")
-    except OSError:
-        pass
     print("Atalhos do GNOME configurados com sucesso para usar o Flatpak!")
+    return True
 
 
 def main():
@@ -428,7 +451,6 @@ def main():
         speed = float(settings.get("speed", SPEED_DEFAULT))
         
         preview = preview_text(text, max_chars=80)
-        send_notification("Narro-RSA", f"{_('notify_reading')}\n\"{preview}\"", icon="media-playback-start-symbolic")
 
         kill_mpv()
         try:
@@ -450,7 +472,6 @@ def main():
                     f"--speed={speed}",
                     result.audio_path
                 ])
-                proc.wait()
 
                 from narro_rsa.mpris import MPRISService
 
@@ -517,26 +538,12 @@ def main():
         sys.exit(0)
 
     if "--pause" in sys.argv:
-        res = send_mpv_command(["get_property", "pause"])
-        is_paused = res.get("data", False) if isinstance(res, dict) else False
         send_mpv_command(["cycle", "pause"])
-        if is_paused:
-            send_notification("Narro-RSA", _("notify_resumed"), icon="media-playback-start-symbolic")
-        else:
-            send_notification("Narro-RSA", _("notify_paused"), icon="media-playback-pause-symbolic")
         sys.exit(0)
         
     if "--stop" in sys.argv:
-        was_active = is_mpv_active()
         kill_mpv()
-        if was_active:
-            send_notification("Narro-RSA", _("notify_stopped"), icon="media-playback-stop-symbolic")
         sys.exit(0)
-
-    try:
-        threading.Thread(target=configure_gnome_shortcuts, daemon=True).start()
-    except Exception as e:
-        print(f"Erro iniciando thread de atalhos: {e}")
 
     app = NarroApp()
     sys.exit(app.run([sys.argv[0]]))

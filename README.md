@@ -24,27 +24,26 @@ Select text in any application, copy it, and use a keyboard shortcut to open the
 
 ---
 
-## Installation Options
+## Installation (Flatpak)
 
-### Option 1: Flatpak (Recommended & Fully Self-Contained)
+The application is distributed and packaged exclusively via Flatpak.
 
-Installing via Flatpak is the easiest method. It bundles all dependencies inside a sandbox, requires no manual configuration of libraries on your host system, and sets up GNOME keyboard shortcuts automatically.
-
-#### 1. Install the Flatpak package:
+### 1. Install the Flatpak package:
 ```bash
 flatpak install --user ./com.github.geraldohomero.NarroRsa.flatpak
 ```
-*Or build directly from the manifest:*
+*Or build directly from the manifest when developing:*
 ```bash
 flatpak-builder --user --install --force-clean --disable-rofiles-fuse build-dir com.github.geraldohomero.NarroRsa.yaml
 ```
 
-#### 2. Run the application:
+### 2. Run the application:
+Launch **Narro-RSA** from your desktop application launcher or run in terminal:
 ```bash
 flatpak run com.github.geraldohomero.NarroRsa
 ```
 
-*(On the first GUI startup, GNOME custom keyboard shortcuts will be configured automatically to use Flatpak!)*
+> **Automatic Shortcuts:** On first launch, Narro-RSA automatically detects and registers all custom GNOME keyboard shortcuts (`Ctrl+\`, `Super+Alt+L`, etc.) without requiring any manual setup. You can also view or reconfigure them anytime in **Settings → GNOME Keyboard Shortcuts**.
 
 ---
 
