@@ -41,7 +41,7 @@ from .constants import (
     VALID_ENGINES,
     get_default_piper_voice,
 )
-from .mpv_control import kill_mpv, send_mpv_command
+from .mpv_control import kill_mpv, send_mpv_command, play_chunked_tts
 from .settings import load_settings, save_settings
 from .subprocess_helper import popen_command
 from .tts_engine import EngineType, TTSRequest, generate_audio
@@ -387,41 +387,26 @@ class TTSIndicator:
                 speed=speed,
             )
 
-            result = generate_audio(request)
-            engine_name = result.engine_name
+            def _on_first_chunk(proc_obj):
+                self._mpv_process = proc_obj
+                self._is_generating = False
+                self._is_playing = True
+                self._update_indicator_state()
 
-            if not self._is_generating:
-                return  # Foi cancelado durante a geração
-
-            if not result.success:
-                self._set_status(f"Erro: {result.error_message}")
+            def _on_error(err_msg):
+                self._set_status(f"Erro: {err_msg}")
                 self._is_generating = False
                 self._update_indicator_state()
-                return
 
-            # Inicia reprodução com mpv
-            self._is_generating = False
-            self._is_playing = True
-            self._update_indicator_state()
-
-            try:
-                os.unlink(MPV_SOCKET)
-            except OSError:
-                pass
-
-            self._mpv_process = popen_command(
-                [
-                    "mpv",
-                    "--no-video",
-                    "--really-quiet",
-                    f"--input-ipc-server={MPV_SOCKET}",
-                    f"--speed={speed}",
-                    result.audio_path,
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            proc, bg_thread = play_chunked_tts(
+                request,
+                on_first_chunk_ready=_on_first_chunk,
+                on_error=_on_error,
+                generate_fn=generate_audio,
             )
-            self._mpv_process.wait()
+
+            if proc is not None:
+                proc.wait()
 
             if self._is_playing:
                 self._is_playing = False

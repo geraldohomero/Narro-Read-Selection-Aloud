@@ -19,6 +19,7 @@ from .constants import (
     PIPER_VOICES_DIR,
     TMP_AUDIO_MP3,
     TMP_AUDIO_WAV,
+    _RUNTIME_DIR,
 )
 from .subprocess_helper import run_command
 from .text_formatter import format_text_for_tts
@@ -55,17 +56,20 @@ def _remove_file_silent(path: str) -> None:
         pass
 
 
-def _generate_with_edge_tts(text: str, voice: str) -> GenerationResult:
+def _generate_with_edge_tts(
+    text: str, voice: str, output_path: str | None = None
+) -> GenerationResult:
     """Gera áudio usando Edge-TTS (online).
 
     Args:
         text: Texto formatado para síntese.
         voice: Código da voz Edge-TTS (ex: ``pt-BR-FranciscaNeural``).
+        output_path: Caminho customizado para o arquivo de áudio gerado.
 
     Returns:
         Resultado da geração com caminho do arquivo MP3.
     """
-    tmp_audio = TMP_AUDIO_MP3
+    tmp_audio = output_path if output_path else TMP_AUDIO_MP3
     _remove_file_silent(tmp_audio)
 
     edge_tts_bin = EDGE_TTS_BIN if os.path.exists(EDGE_TTS_BIN) else "edge-tts"
@@ -99,17 +103,20 @@ def _generate_with_edge_tts(text: str, voice: str) -> GenerationResult:
     )
 
 
-def _generate_with_piper(text: str, voice: str) -> GenerationResult:
+def _generate_with_piper(
+    text: str, voice: str, output_path: str | None = None
+) -> GenerationResult:
     """Gera áudio usando Piper (offline).
 
     Args:
         text: Texto formatado para síntese.
         voice: Código da voz Piper (ex: ``pt_BR-cadu-medium``).
+        output_path: Caminho customizado para o arquivo de áudio gerado.
 
     Returns:
         Resultado da geração com caminho do arquivo WAV.
     """
-    tmp_audio = TMP_AUDIO_WAV
+    tmp_audio = output_path if output_path else TMP_AUDIO_WAV
     model_path = os.path.join(PIPER_VOICES_DIR, f"{voice}.onnx")
 
     if not os.path.exists(model_path):
@@ -152,14 +159,20 @@ def _generate_with_piper(text: str, voice: str) -> GenerationResult:
     )
 
 
-def generate_audio(request: TTSRequest) -> GenerationResult:
+def generate_audio(
+    request: TTSRequest,
+    output_path: str | None = None,
+    preformatted: bool = False,
+) -> GenerationResult:
     """Gera áudio TTS a partir de uma requisição.
 
-    Aplica formatação de texto antes da síntese e despacha para
-    o backend apropriado.
+    Aplica formatação de texto antes da síntese (a menos que preformatted=True)
+    e despacha para o backend apropriado.
 
     Args:
         request: Parâmetros da requisição TTS.
+        output_path: Caminho customizado para o arquivo de saída.
+        preformatted: Se True, não reaplica formatação no texto.
 
     Returns:
         Resultado da geração com status, caminho e mensagem de erro.
@@ -167,7 +180,7 @@ def generate_audio(request: TTSRequest) -> GenerationResult:
     Raises:
         subprocess.TimeoutExpired: Se o backend demorar mais de 120s.
     """
-    formatted_text = format_text_for_tts(request.text)
+    formatted_text = request.text if preformatted else format_text_for_tts(request.text)
     if not formatted_text:
         return GenerationResult(
             success=False,
@@ -177,5 +190,23 @@ def generate_audio(request: TTSRequest) -> GenerationResult:
         )
 
     if request.engine == EngineType.PIPER:
-        return _generate_with_piper(formatted_text, request.voice)
-    return _generate_with_edge_tts(formatted_text, request.voice)
+        return _generate_with_piper(formatted_text, request.voice, output_path=output_path)
+    return _generate_with_edge_tts(formatted_text, request.voice, output_path=output_path)
+
+
+def get_chunk_audio_path(index: int, engine: EngineType) -> str:
+    """Retorna o caminho do arquivo de áudio temporário para um determinado chunk."""
+    ext = "wav" if engine == EngineType.PIPER else "mp3"
+    return os.path.join(_RUNTIME_DIR, f"narro-chunk-{index}.{ext}")
+
+
+def cleanup_chunk_files() -> None:
+    """Remove todos os arquivos temporários de chunks (narro-chunk-*) do diretório de runtime."""
+    if not os.path.exists(_RUNTIME_DIR):
+        return
+    try:
+        for fname in os.listdir(_RUNTIME_DIR):
+            if fname.startswith("narro-chunk-"):
+                _remove_file_silent(os.path.join(_RUNTIME_DIR, fname))
+    except OSError:
+        pass

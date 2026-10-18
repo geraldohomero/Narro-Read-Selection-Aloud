@@ -32,7 +32,7 @@ from narro_rsa.constants import (
     get_default_piper_voice,
 )
 from narro_rsa.settings import load_settings, save_settings
-from narro_rsa.mpv_control import kill_mpv, send_mpv_command, is_mpv_active
+from narro_rsa.mpv_control import kill_mpv, send_mpv_command, is_mpv_active, play_chunked_tts
 from narro_rsa.tts_engine import EngineType, TTSRequest, generate_audio
 from narro_rsa.subprocess_helper import popen_command, check_pid_active, check_and_start_daemon
 from narro_rsa.translations import _
@@ -497,19 +497,13 @@ def main():
                 
             engine_type = EngineType.PIPER if engine == "piper" else EngineType.EDGE_TTS
             request = TTSRequest(text=text, voice=voice, engine=engine_type, speed=speed)
-            result = generate_audio(request)
-            if result.success:
-                proc = popen_command([
-                    "mpv",
-                    "--no-video",
-                    "--really-quiet",
-                    f"--input-ipc-server={MPV_SOCKET}",
-                    f"--speed={speed}",
-                    result.audio_path
-                ])
 
-                from narro_rsa.mpris import MPRISService
+            from narro_rsa.mpris import MPRISService
 
+            loop = GLib.MainLoop()
+            mpris_holder = [None]
+
+            def _on_first_chunk(proc_obj):
                 def _on_play():
                     send_mpv_command(["set_property", "pause", False])
 
@@ -529,31 +523,44 @@ def main():
                     on_stop=_on_stop,
                 )
                 mpris.publish(title=preview, text=text, speed=speed)
-
-                loop = GLib.MainLoop()
+                mpris_holder[0] = mpris
 
                 def _check_mpv_status():
-                    if proc.poll() is not None:
-                        mpris.unpublish()
+                    if proc_obj.poll() is not None:
+                        if mpris_holder[0]:
+                            mpris_holder[0].unpublish()
                         loop.quit()
                         return False
 
                     res = send_mpv_command(["get_property", "pause"])
-                    if isinstance(res, dict) and "data" in res:
+                    if isinstance(res, dict) and "data" in res and mpris_holder[0]:
                         is_paused = bool(res["data"])
-                        curr_status = mpris.playback_status
+                        curr_status = mpris_holder[0].playback_status
                         if is_paused and curr_status != "Paused":
-                            mpris.set_playback_status("Paused")
+                            mpris_holder[0].set_playback_status("Paused")
                         elif not is_paused and curr_status != "Playing":
-                            mpris.set_playback_status("Playing")
+                            mpris_holder[0].set_playback_status("Playing")
 
                     return True
 
                 GLib.timeout_add(250, _check_mpv_status)
 
+            err_holder = [None]
+            def _on_error(err_msg):
+                err_holder[0] = err_msg
+
+            proc, bg_thread = play_chunked_tts(
+                request,
+                on_first_chunk_ready=_on_first_chunk,
+                on_error=_on_error,
+                generate_fn=generate_audio,
+            )
+
+            if proc is not None:
                 def _on_sig(*_):
                     kill_mpv()
-                    mpris.unpublish()
+                    if mpris_holder[0]:
+                        mpris_holder[0].unpublish()
                     loop.quit()
 
                 signal.signal(signal.SIGINT, _on_sig)
@@ -562,10 +569,11 @@ def main():
                 try:
                     loop.run()
                 finally:
-                    mpris.unpublish()
+                    if mpris_holder[0]:
+                        mpris_holder[0].unpublish()
                     kill_mpv()
             else:
-                err = result.error_message or "Erro na síntese de voz"
+                err = err_holder[0] or "Erro na síntese de voz"
                 send_notification("Narro-RSA", _("toast_playback_error", error=err), icon="dialog-error")
         except Exception as e:
             print(f"Erro na leitura em background: {e}")

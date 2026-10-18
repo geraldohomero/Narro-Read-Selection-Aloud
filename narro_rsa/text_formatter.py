@@ -101,3 +101,77 @@ def format_text_for_tts(text: str) -> str:
     text = re.sub(r' {2,}', ' ', text)
 
     return text.strip()
+
+
+def split_text_into_chunks(
+    text: str,
+    first_chunk_max_chars: int = 220,
+    next_chunk_max_chars: int = 600,
+) -> list[str]:
+    """Divide o texto em chunks lógicos respeitando limites de caracteres e pontuação.
+
+    O chunk 0 tem limite reduzido (first_chunk_max_chars) para que a reprodução
+    possa iniciar de imediato com latência quase nula. Chunks subsequentes usam
+    next_chunk_max_chars.
+
+    Args:
+        text: Texto bruto a ser lido.
+        first_chunk_max_chars: Tamanho máximo em caracteres do primeiro chunk (padrão: 220).
+        next_chunk_max_chars: Tamanho máximo dos chunks subsequentes (padrão: 600).
+
+    Returns:
+        Lista de strings correspondendo aos chunks em ordem.
+    """
+    cleaned = format_text_for_tts(text)
+    if not cleaned:
+        return []
+
+    if len(cleaned) <= first_chunk_max_chars:
+        return [cleaned]
+
+    raw_sentences = [s.strip() for s in re.split(r'(?<=[.!?…;:])\s+', cleaned) if s.strip()]
+    if not raw_sentences:
+        return []
+
+    items = list(raw_sentences)
+    chunks: list[str] = []
+    current_chunk: list[str] = []
+    current_len = 0
+
+    while items:
+        item = items.pop(0)
+        limit = first_chunk_max_chars if not chunks else next_chunk_max_chars
+        needed = len(item) if not current_chunk else 1 + len(item)
+
+        if current_len + needed <= limit:
+            current_chunk.append(item)
+            current_len += needed
+        else:
+            if current_chunk:
+                chunks.append(" ".join(current_chunk).strip())
+                current_chunk = []
+                current_len = 0
+                items.insert(0, item)
+            else:
+                # O item sozinho excede o limite do chunk vazio atual.
+                # Tenta quebrar em limites de cláusula/vírgula
+                comma_parts = [p.strip() for p in re.split(r'(?<=[,])\s+', item) if p.strip()]
+                if len(comma_parts) > 1:
+                    items = comma_parts + items
+                else:
+                    # Tenta quebrar em palavras
+                    words = [w.strip() for w in re.split(r'\s+', item) if w.strip()]
+                    if len(words) > 1:
+                        items = words + items
+                    else:
+                        # Palavra individual única maior que o limite: coloca no chunk e finaliza
+                        current_chunk.append(item)
+                        chunks.append(" ".join(current_chunk).strip())
+                        current_chunk = []
+                        current_len = 0
+
+    if current_chunk:
+        chunks.append(" ".join(current_chunk).strip())
+
+    return [c for c in chunks if c]
+
