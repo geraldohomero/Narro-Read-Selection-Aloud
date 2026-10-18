@@ -157,28 +157,56 @@ def _save_snapshot(raw_clip: str, raw_prim: str) -> None:
 def _simulate_copy() -> None:
     """Tenta enviar Ctrl+C para a janela ativa para copiar a seleção em leitores como o Zotero."""
     script = """
-import time
+import fcntl, os, struct, subprocess, time
 try:
-    from evdev import UInput, ecodes as e
-    cap = {e.EV_KEY: [e.KEY_LEFTCTRL, e.KEY_C]}
-    with UInput(cap, name="narro-keyboard") as ui:
-        time.sleep(0.02)
-        ui.write(e.EV_KEY, e.KEY_LEFTCTRL, 1)
-        ui.syn()
-        ui.write(e.EV_KEY, e.KEY_C, 1)
-        ui.syn()
-        time.sleep(0.02)
-        ui.write(e.EV_KEY, e.KEY_C, 0)
-        ui.syn()
-        ui.write(e.EV_KEY, e.KEY_LEFTCTRL, 0)
-        ui.syn()
-        time.sleep(0.02)
+    UI_SET_EVBIT = 0x40045564
+    UI_SET_KEYBIT = 0x40045565
+    UI_DEV_SETUP = 0x405c5503
+    UI_DEV_CREATE = 0x5501
+    UI_DEV_DESTROY = 0x5502
+    EV_SYN, EV_KEY = 0x00, 0x01
+    KEY_LEFTCTRL, KEY_BACKSLASH, KEY_C = 29, 43, 46
+
+    fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
+    fcntl.ioctl(fd, UI_SET_EVBIT, EV_KEY)
+    for k in (KEY_LEFTCTRL, KEY_BACKSLASH, KEY_C):
+        fcntl.ioctl(fd, UI_SET_KEYBIT, k)
+    setup = struct.pack("HHHH80sI", 0x03, 0x1234, 0x5678, 1, b"narro-kbd", 0)
+    fcntl.ioctl(fd, UI_DEV_SETUP, setup)
+    fcntl.ioctl(fd, UI_DEV_CREATE)
+    time.sleep(0.05)
+
+    def emit(t, c, v):
+        os.write(fd, struct.pack("llHHi", 0, 0, t, c, v))
+
+    # Release backslash in case user still physically holds Ctrl+\\
+    emit(EV_KEY, KEY_BACKSLASH, 0)
+    emit(EV_SYN, 0, 0)
+    time.sleep(0.02)
+
+    # Press Ctrl+C
+    emit(EV_KEY, KEY_LEFTCTRL, 1)
+    emit(EV_SYN, 0, 0)
+    emit(EV_KEY, KEY_C, 1)
+    emit(EV_SYN, 0, 0)
+    time.sleep(0.03)
+
+    # Release Ctrl+C
+    emit(EV_KEY, KEY_C, 0)
+    emit(EV_SYN, 0, 0)
+    emit(EV_KEY, KEY_LEFTCTRL, 0)
+    emit(EV_SYN, 0, 0)
+    time.sleep(0.03)
+
+    fcntl.ioctl(fd, UI_DEV_DESTROY)
+    os.close(fd)
 except Exception:
-    import subprocess
-    try:
-        subprocess.run(["xdotool", "key", "--clearmodifiers", "ctrl+c"], timeout=1)
-    except Exception:
-        pass
+    for cmd in (["wtype", "-M", "ctrl", "c", "-m", "ctrl"], ["ydotool", "key", "29:1", "46:1", "46:0", "29:0"], ["xdotool", "key", "--clearmodifiers", "ctrl+c"]):
+        try:
+            if subprocess.run(cmd, timeout=1).returncode == 0:
+                break
+        except Exception:
+            pass
 """
     try:
         run_on_host(["python3", "-c", script], timeout=2)
@@ -206,17 +234,6 @@ def get_clipboard_text(primary: bool = False) -> str:
     raw_clip = _get_raw_clipboard()
     raw_prim = _get_raw_primary()
 
-    if not raw_clip and not raw_prim:
-        if primary:
-            _simulate_copy()
-            for _ in range(6):
-                time.sleep(0.04)
-                new_clip = _get_raw_clipboard()
-                if new_clip:
-                    _save_snapshot(new_clip, "")
-                    return new_clip
-        return ""
-
     last_clip = _read_saved_file(LAST_CLIPBOARD_FILE)
     last_prim = _read_saved_file(LAST_PRIMARY_FILE)
     last_read = _read_saved_file(LAST_READ_FILE)
@@ -224,15 +241,21 @@ def get_clipboard_text(primary: bool = False) -> str:
     clip_changed = bool(raw_clip and raw_clip != last_clip and raw_clip != last_read)
     prim_changed = bool(raw_prim and raw_prim != last_prim and raw_prim != last_read)
 
+    # Quando primary=True (ex: atalho Ctrl+\), se a seleção primária não mudou
+    # (típico no leitor de PDF do Zotero/Firefox onde a seleção não popula o buffer PRIMARY):
+    if primary and not prim_changed:
+        _simulate_copy()
+        for _ in range(8):
+            time.sleep(0.04)
+            new_clip = _get_raw_clipboard()
+            if new_clip and new_clip != last_read:
+                _save_snapshot(new_clip, raw_prim)
+                return new_clip
+
+    if not raw_clip and not raw_prim:
+        return ""
+
     if raw_clip and not raw_prim:
-        if primary and not clip_changed:
-            _simulate_copy()
-            for _ in range(6):
-                time.sleep(0.04)
-                new_clip = _get_raw_clipboard()
-                if new_clip and new_clip != raw_clip:
-                    _save_snapshot(new_clip, "")
-                    return new_clip
         _save_snapshot(raw_clip, "")
         return raw_clip
 
@@ -255,23 +278,7 @@ def get_clipboard_text(primary: bool = False) -> str:
         _save_snapshot(raw_clip, raw_prim)
         return raw_clip
 
-    # 4. Se nenhum dos dois tem texto novo (ex: o usuário selecionou texto no leitor do Zotero,
-    # que não atualiza a seleção primária nem o clipboard do SO):
-    # Simula Ctrl+C na janela ativa para capturar a seleção!
-    if primary and not clip_changed and not prim_changed:
-        _simulate_copy()
-        for _ in range(6):
-            time.sleep(0.04)
-            new_clip = _get_raw_clipboard()
-            if new_clip and new_clip != raw_clip:
-                _save_snapshot(new_clip, raw_prim)
-                return new_clip
-            new_prim = _get_raw_primary()
-            if new_prim and new_prim != raw_prim:
-                _save_snapshot(raw_clip, new_prim)
-                return new_prim
-
-    # 5. Fallback padrão:
+    # Fallback padrão:
     chosen = raw_prim if primary else raw_clip
     _save_snapshot(raw_clip, raw_prim)
     return chosen

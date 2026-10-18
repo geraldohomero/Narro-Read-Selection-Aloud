@@ -162,6 +162,47 @@ class TestClipboardResolution(unittest.TestCase):
         with patch("narro_rsa.clipboard.run_on_host", side_effect=mock_run):
             result = clip.get_clipboard_text(primary=True)
             self.assertEqual(result, "Copied from Zotero")
+    def test_zotero_simulate_copy_pure_python(self):
+        """Ensures _simulate_copy executes the pure-python uinput script without evdev dependency."""
+        with patch("narro_rsa.clipboard.run_on_host") as mock_run:
+            clip._simulate_copy()
+            self.assertTrue(mock_run.called)
+            cmd = mock_run.call_args[0][0]
+            self.assertEqual(cmd[0], "python3")
+            self.assertEqual(cmd[1], "-c")
+            script = cmd[2]
+            self.assertIn("/dev/uinput", script)
+            self.assertIn("fcntl.ioctl", script)
+            self.assertIn("UI_DEV_CREATE", script)
+            self.assertNotIn("import evdev", script)
+            self.assertNotIn("from evdev", script)
+
+    def test_zotero_selection_when_stale_primary(self):
+        """User selected in Zotero, primary buffer has stale text, _simulate_copy() succeeds and returns new clipboard text."""
+        self._write_file(clip.LAST_CLIPBOARD_FILE, "Old clipboard")
+        self._write_file(clip.LAST_PRIMARY_FILE, "Stale primary")
+        self._write_file(clip.LAST_READ_FILE, "Stale primary")
+
+        copied = False
+
+        def mock_run(cmd, **kwargs):
+            nonlocal copied
+            mock = MagicMock()
+            mock.returncode = 0
+            if any("python3" in arg for arg in cmd):
+                copied = True
+                mock.stdout = "OK"
+                return mock
+            if any("primary" in arg for arg in cmd):
+                mock.stdout = "Stale primary"
+            else:
+                mock.stdout = "Newly selected text in Zotero" if copied else ""
+            return mock
+
+        with patch("narro_rsa.clipboard.run_on_host", side_effect=mock_run):
+            result = clip.get_clipboard_text(primary=True)
+            self.assertEqual(result, "Newly selected text in Zotero")
+
     def test_read_gdk_clipboard_returns_empty_when_not_initialized(self):
         with patch("gi.repository.Gtk.is_initialized", return_value=False):
             with patch("gi.repository.Gtk.init_check") as mock_init:
