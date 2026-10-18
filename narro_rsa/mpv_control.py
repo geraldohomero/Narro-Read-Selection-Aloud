@@ -6,6 +6,7 @@ associadas ao Narro-RSA.
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import os
 import socket
@@ -66,18 +67,25 @@ def is_mpv_active() -> bool:
     return True
 
 
-def append_to_mpv_playlist(audio_path: str, timeout: float = 2.0) -> bool:
+def append_to_mpv_playlist(audio_path: str, timeout: float = 2.0, max_retries: int = 5) -> bool:
     """Envia o arquivo de áudio para a playlist do mpv em execução via IPC.
 
     Args:
         audio_path: Caminho absoluto para o arquivo de áudio a ser anexado.
         timeout: Tempo limite para o comando IPC.
+        max_retries: Número de tentativas caso o socket esteja momentaneamente ocupado.
 
     Returns:
         ``True`` se o comando foi aceito com sucesso, ``False`` caso contrário.
     """
-    res = send_mpv_command(["loadfile", audio_path, "append-play"], timeout=timeout)
-    return res is not None and res.get("error") in ("success", None)
+    for _ in range(max_retries):
+        res = send_mpv_command(["loadfile", audio_path, "append-play"], timeout=timeout)
+        if res is not None and res.get("error") in ("success", None):
+            return True
+        if not os.path.exists(MPV_SOCKET):
+            break
+        time.sleep(0.05)
+    return False
 
 
 def play_chunked_tts(
@@ -85,18 +93,23 @@ def play_chunked_tts(
     on_first_chunk_ready: Callable[[subprocess.Popen], None] | None = None,
     on_error: Callable[[str], None] | None = None,
     generate_fn: Callable[..., GenerationResult] | None = None,
+    max_workers: int = 3,
 ) -> tuple[subprocess.Popen | None, threading.Thread | None]:
     """Reproduz texto sintetizado progressivamente em chunks no mpv.
 
-    Gera o primeiro chunk (~220 caracteres) imediatamente e inicia o mpv.
-    Gera chunks subsequentes em thread de background e adiciona-os à playlist do mpv
-    sem pausas (gapless).
+    Gera o primeiro chunk imediatamente e inicia o mpv com --idle=yes caso haja múltiplos
+    chunks para garantir reprodução gapless contínua sem encerramento prematuro.
+    Gera chunks subsequentes adiantados em background (até max_workers em paralelo)
+    e anexa-os ordenadamente à playlist do mpv. Ao anexar o último chunk, instrui
+    o mpv a desativar o modo idle (idle=no) para que ele encerre normalmente ao
+    término da audição de todos os trechos.
 
     Args:
         request: Parâmetros da requisição TTS.
         on_first_chunk_ready: Callback opcional executado assim que o mpv é iniciado no chunk 0.
         on_error: Callback opcional chamado em caso de falha de síntese.
         generate_fn: Função de síntese opcional (padrão: generate_audio).
+        max_workers: Quantidade de chunks sintetizados em paralelo em background (padrão: 3).
 
     Returns:
         Tupla (processo_mpv, thread_de_background). thread_de_background é None se
@@ -128,14 +141,18 @@ def play_chunked_tts(
     except OSError:
         pass
 
-    proc = popen_command([
+    mpv_cmd = [
         "mpv",
         "--no-video",
         "--really-quiet",
         f"--input-ipc-server={MPV_SOCKET}",
         f"--speed={request.speed}",
-        chunk_0_path,
-    ])
+    ]
+    if len(chunks) > 1:
+        mpv_cmd.append("--idle=yes")
+    mpv_cmd.append(chunk_0_path)
+
+    proc = popen_command(mpv_cmd)
 
     if on_first_chunk_ready:
         on_first_chunk_ready(proc)
@@ -144,34 +161,61 @@ def play_chunked_tts(
         return (proc, None)
 
     def _background_chunk_worker() -> None:
-        for idx, chunk_text in enumerate(chunks[1:], start=1):
-            if proc.poll() is not None:
-                break
-            if not is_mpv_active():
-                if not os.path.exists(MPV_SOCKET):
-                    # Aguarda brevemente criação do socket pelo mpv
-                    for _ in range(10):
-                        time.sleep(0.05)
-                        if proc.poll() is not None:
-                            break
-                        if is_mpv_active():
-                            break
-                    else:
-                        if not is_mpv_active():
-                            break
-                else:
+        num_chunks = len(chunks)
+        worker_count = min(max_workers, num_chunks - 1)
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=worker_count)
+        futures: dict[int, concurrent.futures.Future[tuple[int, str, GenerationResult]]] = {}
+
+        def _synth_worker(idx: int, text: str) -> tuple[int, str, GenerationResult]:
+            c_path = get_chunk_audio_path(idx, request.engine)
+            c_req = TTSRequest(text=text, voice=request.voice, engine=request.engine, speed=request.speed)
+            c_res = generate_fn(c_req, output_path=c_path, preformatted=True)
+            return idx, c_path, c_res
+
+        # Submete chunks subsequentes (1 .. num_chunks - 1)
+        for idx in range(1, num_chunks):
+            futures[idx] = executor.submit(_synth_worker, idx, chunks[idx])
+
+        try:
+            for idx in range(1, num_chunks):
+                if proc.poll() is not None:
                     break
 
-            chunk_i_path = get_chunk_audio_path(idx, request.engine)
-            req_i = TTSRequest(text=chunk_text, voice=request.voice, engine=request.engine, speed=request.speed)
-            res_i = generate_fn(req_i, output_path=chunk_i_path, preformatted=True)
-            if not res_i.success:
-                if on_error:
-                    on_error(res_i.error_message)
-                break
-            if proc.poll() is not None:
-                break
-            append_to_mpv_playlist(chunk_i_path)
+                fut = futures[idx]
+                # Aguarda o chunk atual terminar verificando periodicamente se o mpv continua vivo
+                while proc.poll() is None and not fut.done():
+                    try:
+                        fut.result(timeout=0.1)
+                        break
+                    except concurrent.futures.TimeoutError:
+                        continue
+
+                if proc.poll() is not None:
+                    break
+
+                _, chunk_i_path, res_i = fut.result()
+                if not res_i.success:
+                    if on_error:
+                        on_error(res_i.error_message)
+                    send_mpv_command(["set_property", "idle", "no"])
+                    break
+
+                if proc.poll() is not None:
+                    break
+
+                append_to_mpv_playlist(chunk_i_path)
+
+                # Se foi o último chunk, instrui o mpv a desativar idle para encerrar ao fim da playlist
+                if idx == num_chunks - 1:
+                    for _ in range(5):
+                        res = send_mpv_command(["set_property", "idle", "no"])
+                        if res is not None and res.get("error") in ("success", None):
+                            break
+                        if proc.poll() is not None:
+                            break
+                        time.sleep(0.05)
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
     bg_thread = threading.Thread(target=_background_chunk_worker, daemon=True)
     bg_thread.start()

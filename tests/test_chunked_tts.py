@@ -150,20 +150,24 @@ class TestMpvControlChunking(unittest.TestCase):
         first_ready_cb.assert_called_once_with(mock_proc)
         mock_clean.assert_called_once()
         mock_popen.assert_called_once()
+        # Para chunk único, --idle=yes NÃO deve ser passado
+        popen_args = mock_popen.call_args[0][0]
+        self.assertNotIn("--idle=yes", popen_args)
 
-    @patch("narro_rsa.mpv_control.is_mpv_active", return_value=True)
+    @patch("narro_rsa.mpv_control.send_mpv_command")
     @patch("narro_rsa.mpv_control.append_to_mpv_playlist")
     @patch("narro_rsa.mpv_control.cleanup_chunk_files")
     @patch("narro_rsa.mpv_control.generate_audio")
     @patch("narro_rsa.mpv_control.popen_command")
     @patch("narro_rsa.mpv_control.split_text_into_chunks")
     def test_play_chunked_tts_multiple_chunks_appends_playlist(
-        self, mock_split, mock_popen, mock_gen, mock_clean, mock_append, mock_is_active
+        self, mock_split, mock_popen, mock_gen, mock_clean, mock_append, mock_send
     ):
         mock_split.return_value = ["Chunk 0.", "Chunk 1.", "Chunk 2."]
         mock_gen.side_effect = lambda req, output_path=None, preformatted=False: GenerationResult(
             success=True, audio_path=output_path or "/tmp/audio.wav", engine_name="piper", error_message=""
         )
+        mock_send.return_value = {"error": "success"}
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None
         mock_popen.return_value = mock_proc
@@ -174,6 +178,10 @@ class TestMpvControlChunking(unittest.TestCase):
         self.assertEqual(proc, mock_proc)
         self.assertIsNotNone(thread)
 
+        # Deve iniciar com --idle=yes quando há múltiplos chunks
+        popen_args = mock_popen.call_args[0][0]
+        self.assertIn("--idle=yes", popen_args)
+
         # Aguarda thread concluir a geração dos chunks subsequentes
         thread.join(timeout=2.0)
 
@@ -183,14 +191,18 @@ class TestMpvControlChunking(unittest.TestCase):
         self.assertTrue(any("narro-chunk-1" in f for f in appended_files))
         self.assertTrue(any("narro-chunk-2" in f for f in appended_files))
 
-    @patch("narro_rsa.mpv_control.is_mpv_active", return_value=True)
+        # Ao terminar o último chunk, deve ter enviado set_property idle no ao mpv
+        idle_no_calls = [c for c in mock_send.call_args_list if c[0][0] == ["set_property", "idle", "no"]]
+        self.assertTrue(len(idle_no_calls) >= 1)
+
+    @patch("narro_rsa.mpv_control.send_mpv_command")
     @patch("narro_rsa.mpv_control.append_to_mpv_playlist")
     @patch("narro_rsa.mpv_control.cleanup_chunk_files")
     @patch("narro_rsa.mpv_control.generate_audio")
     @patch("narro_rsa.mpv_control.popen_command")
     @patch("narro_rsa.mpv_control.split_text_into_chunks")
     def test_play_chunked_tts_aborts_when_mpv_stops(
-        self, mock_split, mock_popen, mock_gen, mock_clean, mock_append, mock_is_active
+        self, mock_split, mock_popen, mock_gen, mock_clean, mock_append, mock_send
     ):
         mock_split.return_value = ["Chunk 0.", "Chunk 1.", "Chunk 2.", "Chunk 3."]
         mock_gen.side_effect = lambda req, output_path=None, preformatted=False: GenerationResult(
@@ -208,6 +220,38 @@ class TestMpvControlChunking(unittest.TestCase):
 
         # Como mpv já havia parado, nenhum chunk subsequente deve ter sido anexado
         mock_append.assert_not_called()
+
+    @patch("narro_rsa.mpv_control.send_mpv_command")
+    @patch("narro_rsa.mpv_control.append_to_mpv_playlist")
+    @patch("narro_rsa.mpv_control.cleanup_chunk_files")
+    @patch("narro_rsa.mpv_control.generate_audio")
+    @patch("narro_rsa.mpv_control.popen_command")
+    @patch("narro_rsa.mpv_control.split_text_into_chunks")
+    def test_play_chunked_tts_error_in_subsequent_chunk_disables_idle(
+        self, mock_split, mock_popen, mock_gen, mock_clean, mock_append, mock_send
+    ):
+        mock_split.return_value = ["Chunk 0.", "Chunk 1.", "Chunk 2."]
+
+        def _fake_gen(req, output_path=None, preformatted=False):
+            if "Chunk 1." in req.text:
+                return GenerationResult(success=False, audio_path="", engine_name="piper", error_message="Network error")
+            return GenerationResult(success=True, audio_path=output_path or "/tmp/dummy.wav", engine_name="piper", error_message="")
+
+        mock_gen.side_effect = _fake_gen
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+        mock_popen.return_value = mock_proc
+
+        err_cb = MagicMock()
+        req = TTSRequest(text="Texto longo...", voice="v1", engine=EngineType.PIPER, speed=1.0)
+        proc, thread = play_chunked_tts(req, on_error=err_cb)
+
+        thread.join(timeout=2.0)
+
+        err_cb.assert_called_once_with("Network error")
+        # Ao falhar, deve instruir o mpv a desativar idle para não travar
+        idle_no_calls = [c for c in mock_send.call_args_list if c[0][0] == ["set_property", "idle", "no"]]
+        self.assertTrue(len(idle_no_calls) >= 1)
 
 
 if __name__ == "__main__":
