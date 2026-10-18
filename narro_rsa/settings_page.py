@@ -17,44 +17,15 @@ from narro_rsa.constants import CONFIG_DIR, DEFAULT_ENGINE, EDGE_VOICES_CACHE, P
 from narro_rsa.mpv_control import send_mpv_command
 from narro_rsa.settings import load_settings, save_settings
 from narro_rsa.translations import _
-
-# ============================================================================
-# Helpers de Cache de Vozes
-# ============================================================================
-
-def load_edge_voices_cache() -> list[dict] | None:
-    """Carrega o cache local de vozes Edge-TTS."""
-    try:
-        if os.path.exists(EDGE_VOICES_CACHE):
-            with open(EDGE_VOICES_CACHE, "r", encoding="utf-8") as fh:
-                return json.load(fh)
-    except (json.JSONDecodeError, OSError):
-        pass
-    return None
-
-def save_edge_voices_cache(voices: list[dict]) -> None:
-    """Salva o cache local de vozes Edge-TTS."""
-    try:
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(EDGE_VOICES_CACHE, "w", encoding="utf-8") as fh:
-            json.dump(voices, fh, ensure_ascii=False)
-    except OSError:
-        pass
-
-# Lista simplificada para fallback se estiver offline no primeiro carregamento
-FALLBACK_EDGE_VOICES = [
-    {"ShortName": "pt-BR-AntonioNeural", "Gender": "Male", "FriendlyName": "Microsoft Antonio Online (Natural) - Portuguese (Brazil)", "Locale": "pt-BR"},
-    {"ShortName": "pt-BR-FranciscaNeural", "Gender": "Female", "FriendlyName": "Microsoft Francisca Online (Natural) - Portuguese (Brazil)", "Locale": "pt-BR"},
-    {"ShortName": "pt-BR-ThalitaMultilingualNeural", "Gender": "Female", "FriendlyName": "Microsoft Thalita Online (Natural) - Portuguese (Brazil)", "Locale": "pt-BR"},
-    {"ShortName": "pt-PT-DuarteNeural", "Gender": "Male", "FriendlyName": "Microsoft Duarte Online (Natural) - Portuguese (Portugal)", "Locale": "pt-PT"},
-    {"ShortName": "pt-PT-RaquelNeural", "Gender": "Female", "FriendlyName": "Microsoft Raquel Online (Natural) - Portuguese (Portugal)", "Locale": "pt-PT"},
-    {"ShortName": "en-US-AriaNeural", "Gender": "Female", "FriendlyName": "Microsoft Aria Online (Natural) - English (United States)", "Locale": "en-US"},
-    {"ShortName": "en-US-GuyNeural", "Gender": "Male", "FriendlyName": "Microsoft Guy Online (Natural) - English (United States)", "Locale": "en-US"},
-    {"ShortName": "es-ES-AlvaroNeural", "Gender": "Male", "FriendlyName": "Microsoft Alvaro Online (Natural) - Spanish (Spain)", "Locale": "es-ES"},
-    {"ShortName": "es-ES-ElviraNeural", "Gender": "Female", "FriendlyName": "Microsoft Elvira Online (Natural) - Spanish (Spain)", "Locale": "es-ES"},
-    {"ShortName": "fr-FR-HenriNeural", "Gender": "Male", "FriendlyName": "Microsoft Henri Online (Natural) - French (France)", "Locale": "fr-FR"},
-    {"ShortName": "de-DE-ConradNeural", "Gender": "Male", "FriendlyName": "Microsoft Conrad Online (Natural) - German (Germany)", "Locale": "de-DE"}
-]
+from narro_rsa.voice_catalog import (
+    FALLBACK_EDGE_VOICES,
+    extract_lang_code,
+    fetch_edge_voices,
+    fetch_piper_catalog,
+    format_language_search_entry,
+    load_edge_voices_cache,
+    save_edge_voices_cache,
+)
 
 
 class SettingsPage(Adw.NavigationPage):
@@ -436,40 +407,8 @@ class SettingsPage(Adw.NavigationPage):
 
     def _load_catalogs_thread(self):
         """Método em segundo plano para obter as listas de vozes da Microsoft e do Piper."""
-        # 1. Tenta baixar o catálogo do Edge TTS via urllib
-        self.edge_voices = load_edge_voices_cache()
-        if not self.edge_voices:
-            try:
-                # Faz requisição direta utilizando urllib para contornar sandboxing
-                url = "https://speech.platform.bing.com/consumer/speech/synthesize/readaloud/voices/list"
-                req = urllib.request.Request(
-                    url,
-                    headers={"User-Agent": "Mozilla/5.0"}
-                )
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    data = response.read().decode("utf-8")
-                    self.edge_voices = json.loads(data)
-                    save_edge_voices_cache(self.edge_voices)
-            except Exception as e:
-                print(f"Erro ao baixar vozes do Edge: {e}")
-                self.edge_voices = FALLBACK_EDGE_VOICES
-
-        # 2. Tenta baixar o catálogo do Piper
-        piper_catalog_path = os.path.join(CONFIG_DIR, "piper_voices.json")
-        try:
-            if not os.path.exists(piper_catalog_path):
-                url = "https://huggingface.co/rhasspy/piper-voices/resolve/main/voices.json"
-                req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=5) as response:
-                    data = response.read().decode("utf-8")
-                    with open(piper_catalog_path, "w", encoding="utf-8") as fh:
-                        fh.write(data)
-            
-            with open(piper_catalog_path, "r", encoding="utf-8") as fh:
-                self.piper_catalog = json.load(fh)
-        except Exception as e:
-            print(f"Erro no catálogo do Piper: {e}")
-            self.piper_catalog = {}
+        self.edge_voices = fetch_edge_voices()
+        self.piper_catalog = fetch_piper_catalog()
 
         # Notifica o thread do GTK de que os dados estão prontos
         GLib.idle_add(self._on_catalogs_loaded)
@@ -515,7 +454,11 @@ class SettingsPage(Adw.NavigationPage):
                         langs.add(lang_code)
 
         sorted_langs = sorted(list(langs))
-        self.lang_string_list = Gtk.StringList.new(sorted_langs)
+        formatted_entries = [
+            format_language_search_entry(code, self.piper_catalog)
+            for code in sorted_langs
+        ]
+        self.lang_string_list = Gtk.StringList.new(formatted_entries)
         expr = Gtk.PropertyExpression.new(Gtk.StringObject, None, "string")
         self.lang_dropdown.set_expression(expr)
         self.lang_dropdown.set_model(self.lang_string_list)
@@ -534,23 +477,34 @@ class SettingsPage(Adw.NavigationPage):
         found_idx = -1
         for i in range(n):
             val = self.lang_string_list.get_string(i)
-            if val == target_lang:
+            code = extract_lang_code(val)
+            if code == target_lang or val == target_lang:
                 found_idx = i
                 break
+
+        if found_idx == -1 and target_lang:
+            norm_target = target_lang.replace("_", "-")
+            for i in range(n):
+                val = self.lang_string_list.get_string(i)
+                code = extract_lang_code(val)
+                if code.replace("_", "-") == norm_target:
+                    found_idx = i
+                    target_lang = code
+                    break
 
         if found_idx != -1:
             self.lang_dropdown.set_selected(found_idx)
             self.selected_lang = target_lang
         elif n > 0:
             self.lang_dropdown.set_selected(0)
-            self.selected_lang = self.lang_string_list.get_string(0)
+            self.selected_lang = extract_lang_code(self.lang_string_list.get_string(0))
 
     def _on_lang_dropdown_changed(self, dropdown, pspec):
         if getattr(self, "_is_populating_langs", False):
             return
         selected_item = dropdown.get_selected_item()
         if selected_item and hasattr(selected_item, "get_string"):
-            self.selected_lang = selected_item.get_string()
+            self.selected_lang = extract_lang_code(selected_item.get_string())
             self._populate_voices()
             self._select_current_voice_in_treeview()
             self._update_buttons_state()
