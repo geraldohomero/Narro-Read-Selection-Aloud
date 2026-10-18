@@ -99,7 +99,8 @@ modules:
     sources:
       - type: file
         url: https://raw.githubusercontent.com/flatpak/flatpak-builder/main/README.md
-        sha256: 0ca552651e3a2724f1112825a55991d364588a5e5b9aba19befb5584d434807b
+        sha256: 61517677384cf478ded7d1fe19c4771d8a45e265ea2a0ca273a95edeec853252
+
 
   - name: narro-rsa
     buildsystem: simple
