@@ -73,6 +73,12 @@ class MainWindow(Adw.ApplicationWindow):
         self.header_bar = Adw.HeaderBar()
         self.toolbar_view.add_top_bar(self.header_bar)
 
+        # Banner de Notificações / Status (no topo, logo abaixo da HeaderBar para nunca cobrir controles inferiores)
+        self.banner = Adw.Banner()
+        self.banner.set_revealed(False)
+        self.toolbar_view.add_top_bar(self.banner)
+        self._banner_timer_id = 0
+
         self.header_title = Adw.WindowTitle()
         self.header_title.set_title(_("title"))
         self.header_bar.set_title_widget(self.header_title)
@@ -131,21 +137,28 @@ class MainWindow(Adw.ApplicationWindow):
         threading.Thread(target=_setup_shortcuts_async, daemon=True).start()
 
     def show_toast(self, message: str, timeout: int = 3):
-        """Exibe uma notificação flutuante (toast) nativa do GNOME/Adwaita."""
-        toast = Adw.Toast.new(message)
-        toast.set_timeout(timeout)
-        target_overlay = getattr(self, "toast_overlay", None)
-        if hasattr(self, "navigation_view"):
+        """Exibe uma notificação no topo (Adw.Banner) na tela inicial ou Adw.Toast nas configurações."""
+        if hasattr(self, "banner") and hasattr(self, "navigation_view"):
             page = self.navigation_view.get_visible_page()
-            if page and getattr(page, "get_tag", lambda: "")() == "settings":
-                target_overlay = getattr(self, "toast_overlay", None)
-            elif hasattr(self, "reader_page") and hasattr(self.reader_page, "toast_overlay"):
-                target_overlay = self.reader_page.toast_overlay
-        elif hasattr(self, "reader_page") and hasattr(self.reader_page, "toast_overlay"):
-            target_overlay = self.reader_page.toast_overlay
+            # Na tela principal do leitor, exibe no banner superior para nunca bloquear os controles de reprodução
+            if not page or getattr(page, "get_tag", lambda: "")() != "settings":
+                self.banner.set_title(message)
+                self.banner.set_revealed(True)
+                if hasattr(self, "_banner_timer_id") and self._banner_timer_id:
+                    GLib.source_remove(self._banner_timer_id)
 
-        if target_overlay:
-            target_overlay.add_toast(toast)
+                def _hide():
+                    self._banner_timer_id = 0
+                    self.banner.set_revealed(False)
+                    return False
+
+                self._banner_timer_id = GLib.timeout_add_seconds(timeout, _hide)
+                return
+
+        if hasattr(self, "toast_overlay") and self.toast_overlay:
+            toast = Adw.Toast.new(message)
+            toast.set_timeout(timeout)
+            self.toast_overlay.add_toast(toast)
 
     def _apply_css(self):
         css_provider = Gtk.CssProvider()

@@ -45,7 +45,7 @@ class ReaderPage(Gtk.Box):
         self.main_window = main_window
         self._mpv_process = None
         self._local_thread = None
-        self.quick_voice_codes: list[str] = []
+        self.quick_voice_codes: list[str] | None = None
         self._is_populating_quick_voices: bool = False
 
         self.set_margin_start(16)
@@ -77,14 +77,7 @@ class ReaderPage(Gtk.Box):
         self.text_view.set_margin_bottom(8)
         scrolled.set_child(self.text_view)
 
-        # Envolve a área de texto em seu próprio ToastOverlay para que as notificações
-        # apareçam sobre a caixa de texto e NUNCA fiquem por cima dos botões de controle
-        # (Play/Pause/Stop) e do controle deslizante de velocidade.
-        self.toast_overlay = Adw.ToastOverlay()
-        self.toast_overlay.set_child(scrolled)
-        self.toast_overlay.set_hexpand(True)
-        self.toast_overlay.set_vexpand(True)
-        self.append(self.toast_overlay)
+        self.append(scrolled)
 
         self.focus_controller = Gtk.EventControllerFocus.new()
         self.focus_controller.connect("enter", self._on_text_view_focus_enter)
@@ -133,6 +126,8 @@ class ReaderPage(Gtk.Box):
         self.quick_box.append(self.quick_voice_lbl)
 
         self.quick_voice_dropdown = Gtk.DropDown()
+        expr = Gtk.PropertyExpression.new(Gtk.StringObject, None, "string")
+        self.quick_voice_dropdown.set_expression(expr)
         self.quick_voice_dropdown.set_enable_search(True)
         self.quick_voice_dropdown.set_hexpand(True)
         self.quick_box.append(self.quick_voice_dropdown)
@@ -266,26 +261,17 @@ class ReaderPage(Gtk.Box):
                 piper_cat = fetch_piper_catalog()
                 downloaded = get_downloaded_piper_voices(piper_cat)
                 if not downloaded:
-                    self.quick_voice_codes = []
-                    self.quick_voice_dropdown.set_model(
-                        Gtk.StringList.new([_("no_piper_voices_downloaded")])
-                    )
-                    self.quick_voice_dropdown.set_sensitive(False)
+                    new_codes = []
+                    new_labels = [_("no_piper_voices_downloaded")]
+                    sensitive = False
                 else:
-                    codes = []
-                    labels = []
+                    new_codes = []
+                    new_labels = []
                     for code, disp in downloaded:
                         lbl = self._format_piper_quick_label(code, disp, piper_cat)
-                        codes.append(code)
-                        labels.append(lbl)
-                    self.quick_voice_codes = codes
-                    self.quick_voice_dropdown.set_model(Gtk.StringList.new(labels))
-                    self.quick_voice_dropdown.set_sensitive(True)
-
-                    sel_idx = 0
-                    if current_voice and current_voice in codes:
-                        sel_idx = codes.index(current_voice)
-                    self.quick_voice_dropdown.set_selected(sel_idx)
+                        new_codes.append(code)
+                        new_labels.append(lbl)
+                    sensitive = True
             else:
                 edge_voices = fetch_edge_voices()
                 top_voices = list(get_top_edge_quick_voices(edge_voices))
@@ -300,15 +286,21 @@ class ReaderPage(Gtk.Box):
                                 break
                     top_voices.insert(0, (current_voice, custom_disp))
 
-                codes = [c for c, _ in top_voices]
-                labels = [d for _, d in top_voices]
-                self.quick_voice_codes = codes
-                self.quick_voice_dropdown.set_model(Gtk.StringList.new(labels))
-                self.quick_voice_dropdown.set_sensitive(True)
+                new_codes = [c for c, _ in top_voices]
+                new_labels = [d for _, d in top_voices]
+                sensitive = True
 
-                sel_idx = 0
-                if current_voice and current_voice in codes:
-                    sel_idx = codes.index(current_voice)
+            # Só recria o modelo se a lista de vozes realmente foi alterada, prevenindo
+            # destruição de itens em memória enquanto o GTK processa eventos do dropdown
+            if getattr(self, "quick_voice_codes", None) != new_codes:
+                self.quick_voice_codes = new_codes
+                self.quick_voice_dropdown.set_model(Gtk.StringList.new(new_labels))
+            self.quick_voice_dropdown.set_sensitive(sensitive)
+
+            sel_idx = 0
+            if current_voice and current_voice in self.quick_voice_codes:
+                sel_idx = self.quick_voice_codes.index(current_voice)
+            if self.quick_voice_dropdown.get_selected() != sel_idx:
                 self.quick_voice_dropdown.set_selected(sel_idx)
         finally:
             self._is_populating_quick_voices = False
@@ -357,7 +349,8 @@ class ReaderPage(Gtk.Box):
                 sp._update_buttons_state()
                 sp._update_current_selection_label()
 
-        self._populate_quick_voices()
+        # Atualiza a lista de vozes de forma segura no próximo ciclo da main loop
+        GLib.idle_add(self._populate_quick_voices)
 
     def _on_quick_voice_changed(self, dropdown, _param):
         if self._is_populating_quick_voices:
@@ -375,11 +368,8 @@ class ReaderPage(Gtk.Box):
                 )
                 if hasattr(self, "main_window") and hasattr(self.main_window, "settings_page") and self.main_window.settings_page:
                     sp = self.main_window.settings_page
-                    sp.current_voice = new_voice
-                    if hasattr(sp, "_select_current_voice_in_treeview"):
-                        sp._select_current_voice_in_treeview()
-                    if hasattr(sp, "_update_current_selection_label"):
-                        sp._update_current_selection_label()
+                    if hasattr(sp, "_sync_voice_selection"):
+                        sp._sync_voice_selection(new_voice)
 
     def _on_speed_scale_changed(self, scale):
         """Salva a nova velocidade e atualiza em tempo real se mpv estiver rodando sem travar a UI."""

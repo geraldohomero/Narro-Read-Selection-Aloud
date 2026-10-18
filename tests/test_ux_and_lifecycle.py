@@ -131,13 +131,14 @@ class TestReaderPageFeedback(unittest.TestCase):
                 fn = mock_idle.call_args[0][0]
                 self.assertEqual(fn, mock_win.show_toast)
 
-    def test_reader_page_has_toast_overlay_above_controls(self):
+    def test_reader_page_scrolled_direct_and_main_window_banner(self):
         from narro_rsa.reader_page import ReaderPage
         mock_win = MagicMock()
         page = ReaderPage(mock_win)
-        self.assertTrue(hasattr(page, "toast_overlay"))
-        # Verifica que o overlay envolve a área de texto
-        self.assertEqual(page.toast_overlay.get_child(), page.text_view.get_parent())
+        self.assertFalse(hasattr(page, "toast_overlay"))
+        # Verifica que o scrolledWindow é filho direto do ReaderPage
+        scrolled = page.text_view.get_parent()
+        self.assertEqual(scrolled.get_parent(), page)
 
     @patch("narro_rsa.reader_page.send_mpv_command")
     def test_on_speed_scale_changed_updates_label(self, mock_send):
@@ -275,7 +276,35 @@ class TestReaderPageQuickSelectors(unittest.TestCase):
         calls = [c.kwargs for c in mock_save.call_args_list if "voice" in c.kwargs]
         self.assertTrue(any(c.get("voice") == "en-US-AriaNeural" for c in calls))
 
+    @patch("narro_rsa.reader_page.load_settings")
+    @patch("narro_rsa.reader_page.get_top_edge_quick_voices")
+    def test_quick_voice_selection_preserves_dropdown_model(self, mock_edge, mock_load):
+        mock_load.return_value = {"engine": "edge-tts", "voice": "pt-BR-FranciscaNeural"}
+        mock_edge.return_value = [
+            ("pt-BR-FranciscaNeural", "Francisca (Português - Brasil)"),
+            ("en-US-AriaNeural", "Aria (English - US)"),
+        ]
+        from narro_rsa.reader_page import ReaderPage
+        mock_win = MagicMock()
+        page = ReaderPage(mock_win)
+        initial_model = page.quick_voice_dropdown.get_model()
+
+        # Calling _populate_quick_voices again with same codes must NOT recreate the model
+        page._populate_quick_voices()
+        self.assertIs(page.quick_voice_dropdown.get_model(), initial_model)
+
+    def test_settings_page_sync_voice_selection_isolation(self):
+        from narro_rsa.settings_page import SettingsPage
+        mock_win = MagicMock()
+        sp = SettingsPage(mock_win)
+        sp._load_and_update_settings = MagicMock()
+
+        sp._sync_voice_selection("pt-BR-AntonioNeural")
+        self.assertEqual(sp.current_voice, "pt-BR-AntonioNeural")
+        mock_win._load_and_update_settings.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

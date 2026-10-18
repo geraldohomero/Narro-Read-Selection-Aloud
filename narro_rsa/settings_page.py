@@ -630,7 +630,7 @@ class SettingsPage(Adw.NavigationPage):
                     ])
 
     def _select_current_voice_in_treeview(self):
-        """Seleciona graficamente a voz ativa atual no TreeView."""
+        """Seleciona graficamente a voz ativa atual no TreeView sem disparar eventos em cascata."""
         if not self.current_voice:
             return
 
@@ -638,12 +638,18 @@ class SettingsPage(Adw.NavigationPage):
         treeiter = self.voice_liststore.get_iter_first()
         while treeiter:
             code = self.voice_liststore.get_value(treeiter, 1)
-            if code == self.current_voice:
+            is_match = (code == self.current_voice)
+            self.voice_liststore.set_value(treeiter, 0, is_match)
+            if is_match:
                 selection.select_iter(treeiter)
-                # Garante que o botão de opção gráfica reflita
-                self._on_voice_radio_toggled(None, self.voice_liststore.get_path(treeiter).to_string())
-                break
             treeiter = self.voice_liststore.iter_next(treeiter)
+        self._update_current_selection_label()
+        self._update_buttons_state()
+
+    def _sync_voice_selection(self, new_voice: str):
+        """Sincroniza a seleção da voz ativa vinda do seletor rápido sem disparar recarregamento reentrante."""
+        self.current_voice = new_voice
+        self._select_current_voice_in_treeview()
 
     def _on_voice_selection_changed(self, selection):
         self._update_buttons_state()
@@ -676,9 +682,12 @@ class SettingsPage(Adw.NavigationPage):
         self._update_current_selection_label()
         self._update_buttons_state()
 
-        # Avisa a janela principal para atualizar o badge de voz ativa se necessário
-        if hasattr(self.main_window, "_load_and_update_settings"):
-            self.main_window._load_and_update_settings()
+        # Avisa a tela inicial para atualizar o badge de voz ativa e o dropdown de forma segura
+        if hasattr(self.main_window, "reader_page") and self.main_window.reader_page:
+            rp = self.main_window.reader_page
+            engine = "Online" if self.current_engine == "edge-tts" else "Offline"
+            rp.active_voice_lbl.set_markup(_("voice_active", voice=code, engine=engine))
+            GLib.idle_add(rp._populate_quick_voices)
 
     def _update_current_selection_label(self):
         """Altera o indicador superior de voz configurada."""
