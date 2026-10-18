@@ -134,7 +134,18 @@ class MainWindow(Adw.ApplicationWindow):
         """Exibe uma notificação flutuante (toast) nativa do GNOME/Adwaita."""
         toast = Adw.Toast.new(message)
         toast.set_timeout(timeout)
-        self.toast_overlay.add_toast(toast)
+        target_overlay = getattr(self, "toast_overlay", None)
+        if hasattr(self, "navigation_view"):
+            page = self.navigation_view.get_visible_page()
+            if page and getattr(page, "get_tag", lambda: "")() == "settings":
+                target_overlay = getattr(self, "toast_overlay", None)
+            elif hasattr(self, "reader_page") and hasattr(self.reader_page, "toast_overlay"):
+                target_overlay = self.reader_page.toast_overlay
+        elif hasattr(self, "reader_page") and hasattr(self.reader_page, "toast_overlay"):
+            target_overlay = self.reader_page.toast_overlay
+
+        if target_overlay:
+            target_overlay.add_toast(toast)
 
     def _apply_css(self):
         css_provider = Gtk.CssProvider()

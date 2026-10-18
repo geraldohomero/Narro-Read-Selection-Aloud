@@ -76,7 +76,15 @@ class ReaderPage(Gtk.Box):
         self.text_view.set_margin_top(8)
         self.text_view.set_margin_bottom(8)
         scrolled.set_child(self.text_view)
-        self.append(scrolled)
+
+        # Envolve a área de texto em seu próprio ToastOverlay para que as notificações
+        # apareçam sobre a caixa de texto e NUNCA fiquem por cima dos botões de controle
+        # (Play/Pause/Stop) e do controle deslizante de velocidade.
+        self.toast_overlay = Adw.ToastOverlay()
+        self.toast_overlay.set_child(scrolled)
+        self.toast_overlay.set_hexpand(True)
+        self.toast_overlay.set_vexpand(True)
+        self.append(self.toast_overlay)
 
         self.focus_controller = Gtk.EventControllerFocus.new()
         self.focus_controller.connect("enter", self._on_text_view_focus_enter)
@@ -374,14 +382,30 @@ class ReaderPage(Gtk.Box):
                         sp._update_current_selection_label()
 
     def _on_speed_scale_changed(self, scale):
-        """Salva a nova velocidade e atualiza em tempo real se mpv estiver rodando."""
+        """Salva a nova velocidade e atualiza em tempo real se mpv estiver rodando sem travar a UI."""
         if getattr(self, "_is_updating_speed", False):
             return
         val = scale.get_value()
         speed = round(val, 2)
         self.speed_value_lbl.set_markup(f"<b>{speed:.2f}x</b>")
-        save_settings(speed=speed)
-        send_mpv_command(["set_property", "speed", speed])
+
+        # Atualiza a velocidade imediatamente no MPV em thread secundária para não travar a UI
+        threading.Thread(
+            target=send_mpv_command,
+            args=(["set_property", "speed", speed],),
+            daemon=True,
+        ).start()
+
+        # Debounce para gravação em disco
+        if hasattr(self, "_speed_timer_id") and self._speed_timer_id:
+            GLib.source_remove(self._speed_timer_id)
+
+        def _save():
+            self._speed_timer_id = 0
+            save_settings(speed=speed)
+            return False
+
+        self._speed_timer_id = GLib.timeout_add(150, _save)
 
     def _on_text_view_focus_enter(self, controller):
         """Ao focar no campo de texto, limpa a instrução se o usuário ainda não digitou nada."""
@@ -444,12 +468,15 @@ class ReaderPage(Gtk.Box):
             prim.read_text_async(None, _on_prim_done)
 
     def _generate_and_play_local(self, text, voice, speed, engine_name):
+        import time
         from narro_rsa.constants import MPV_SOCKET
         from narro_rsa.mpris import MPRISService
         from narro_rsa.notifications import preview_text
+        from narro_rsa.tts_engine import cleanup_chunk_files
         try:
             try:
-                os.unlink(MPV_SOCKET)
+                if os.path.exists(MPV_SOCKET):
+                    os.unlink(MPV_SOCKET)
             except OSError:
                 pass
 
@@ -472,23 +499,6 @@ class ReaderPage(Gtk.Box):
                 )
                 self._mpris.publish(title=preview, text=text, speed=speed)
 
-                def _poll_gui_mpv():
-                    if not self._mpv_process or self._mpv_process.poll() is not None:
-                        if hasattr(self, "_mpris") and self._mpris:
-                            self._mpris.unpublish()
-                        return False
-                    res = send_mpv_command(["get_property", "pause"])
-                    if isinstance(res, dict) and "data" in res and hasattr(self, "_mpris") and self._mpris:
-                        is_paused = bool(res["data"])
-                        curr_status = self._mpris.playback_status
-                        if is_paused and curr_status != "Paused":
-                            self._mpris.set_playback_status("Paused")
-                        elif not is_paused and curr_status != "Playing":
-                            self._mpris.set_playback_status("Playing")
-                    return True
-
-                GLib.idle_add(lambda: GLib.timeout_add(250, _poll_gui_mpv))
-
             def _on_error(err_msg):
                 if hasattr(self, "main_window") and hasattr(self.main_window, "show_toast"):
                     GLib.idle_add(self.main_window.show_toast, _("toast_playback_error", error=err_msg))
@@ -501,7 +511,18 @@ class ReaderPage(Gtk.Box):
             )
 
             if proc is not None:
-                proc.wait()
+                # O loop de verificação de status do MPV roda exclusivamente nesta thread de background,
+                # garantindo que nenhuma chamada de IPC/socket bloqueie a thread principal do GTK
+                while proc.poll() is None:
+                    time.sleep(0.25)
+                    res = send_mpv_command(["get_property", "pause"], timeout=0.2)
+                    if isinstance(res, dict) and "data" in res and hasattr(self, "_mpris") and self._mpris:
+                        is_paused = bool(res["data"])
+                        curr_status = self._mpris.playback_status
+                        if is_paused and curr_status != "Paused":
+                            self._mpris.set_playback_status("Paused")
+                        elif not is_paused and curr_status != "Playing":
+                            self._mpris.set_playback_status("Playing")
         except Exception as e:
             print(f"Erro local: {e}")
         finally:
@@ -512,9 +533,11 @@ class ReaderPage(Gtk.Box):
                     os.unlink(MPV_SOCKET)
             except OSError:
                 pass
+            cleanup_chunk_files()
+            self._mpv_process = None
 
     def _on_play_clicked(self, btn):
-        """Salva o texto e envia sinal para ler, ou reproduz localmente se o daemon não estiver ativo."""
+        """Salva o texto e inicia a reprodução localmente em segundo plano."""
         buffer = self.text_view.get_buffer()
         start, end = buffer.get_bounds()
         text = buffer.get_text(start, end, True).strip()
@@ -531,54 +554,36 @@ class ReaderPage(Gtk.Box):
         except OSError:
             pass
 
-        # Tenta ver se o daemon está ativo
-        daemon_active = False
-        pid = None
-        if os.path.exists(LOCKFILE):
-            try:
-                with open(LOCKFILE, "r", encoding="utf-8") as fh:
-                    pid = int(fh.read().strip())
-                if check_pid_active(pid):
-                    daemon_active = True
-            except (ValueError, OSError):
-                pass
+        settings = load_settings()
+        engine = settings.get("engine", DEFAULT_ENGINE)
+        default_voice = DEFAULT_VOICE_EDGE if engine == "edge-tts" else get_default_piper_voice()
+        voice = settings.get("voice") or default_voice
+        speed = round(self.speed_scale.get_value(), 2)
 
-        if daemon_active and pid:
-            try:
-                with open(TMP_TEXT_FILE, "w", encoding="utf-8") as fh:
-                    fh.write(text)
-                with open(LAST_READ_FILE, "w", encoding="utf-8") as fh:
-                    fh.write(text)
-            except OSError:
-                return
-
-            try:
-                os.kill(pid, signal.SIGUSR1)
-            except OSError:
-                pass
-        else:
-            check_and_start_daemon()
-            
+        def _start_worker():
             kill_mpv()
-            settings = load_settings()
-            engine = settings.get("engine", DEFAULT_ENGINE)
-            default_voice = DEFAULT_VOICE_EDGE if engine == "edge-tts" else get_default_piper_voice()
-            voice = settings.get("voice") or default_voice
-            speed = float(settings.get("speed", SPEED_DEFAULT))
-            
-            self._local_thread = threading.Thread(
-                target=self._generate_and_play_local,
-                args=(text, voice, speed, engine),
-                daemon=True
-            )
-            self._local_thread.start()
+            self._generate_and_play_local(text, voice, speed, engine)
+
+        self._local_thread = threading.Thread(
+            target=_start_worker,
+            daemon=True,
+        )
+        self._local_thread.start()
 
     def _on_pause_clicked(self, btn):
-        """Informa ao daemon ou ao mpv local para pausar/retomar."""
-        send_mpv_command(["cycle", "pause"])
+        """Informa ao mpv para pausar/retomar de forma não-bloqueante."""
+        threading.Thread(
+            target=send_mpv_command,
+            args=(["cycle", "pause"],),
+            daemon=True,
+        ).start()
 
     def _on_stop_clicked(self, btn):
-        """Para a reprodução completamente."""
-        kill_mpv()
+        """Para a reprodução completamente sem travar a interface."""
+        threading.Thread(
+            target=kill_mpv,
+            daemon=True,
+        ).start()
         if hasattr(self, "_mpris") and self._mpris:
             self._mpris.unpublish()
+        self._mpv_process = None

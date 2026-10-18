@@ -131,6 +131,22 @@ class TestReaderPageFeedback(unittest.TestCase):
                 fn = mock_idle.call_args[0][0]
                 self.assertEqual(fn, mock_win.show_toast)
 
+    def test_reader_page_has_toast_overlay_above_controls(self):
+        from narro_rsa.reader_page import ReaderPage
+        mock_win = MagicMock()
+        page = ReaderPage(mock_win)
+        self.assertTrue(hasattr(page, "toast_overlay"))
+        # Verifica que o overlay envolve a área de texto
+        self.assertEqual(page.toast_overlay.get_child(), page.text_view.get_parent())
+
+    @patch("narro_rsa.reader_page.send_mpv_command")
+    def test_on_speed_scale_changed_updates_label(self, mock_send):
+        from narro_rsa.reader_page import ReaderPage
+        mock_win = MagicMock()
+        page = ReaderPage(mock_win)
+        page.speed_scale.set_value(1.75)
+        self.assertIn("1.75x", page.speed_value_lbl.get_text())
+
 
 class TestReaderPageQuickSelectors(unittest.TestCase):
     @classmethod
