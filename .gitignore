@@ -5,7 +5,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-
+docs/
+.superpowers/*
 # Temp files
 *.mp3
 *.sock

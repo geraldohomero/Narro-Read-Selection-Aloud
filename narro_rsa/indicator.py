@@ -28,6 +28,7 @@ from gi.repository import GLib, Gtk
 from .clipboard import get_clipboard_text
 from .constants import (
     APPINDICATOR_ID,
+    DEFAULT_ENGINE,
     DEFAULT_VOICE_EDGE,
     DEFAULT_VOICE_PIPER,
     MPV_SOCKET,
@@ -38,6 +39,7 @@ from .constants import (
     TMP_AUDIO_WAV,
     TMP_TEXT_FILE,
     VALID_ENGINES,
+    get_default_piper_voice,
 )
 from .mpv_control import kill_mpv, send_mpv_command
 from .settings import load_settings, save_settings
@@ -89,14 +91,14 @@ class TTSIndicator:
         """Carrega (ou recarrega) as preferências do disco."""
         saved = load_settings()
 
-        self._current_engine = saved.get("engine", "edge-tts")
+        self._current_engine = saved.get("engine", DEFAULT_ENGINE)
         if self._current_engine not in VALID_ENGINES:
-            self._current_engine = "edge-tts"
+            self._current_engine = DEFAULT_ENGINE
 
         self._current_voice = saved.get("voice") or (
             DEFAULT_VOICE_EDGE
             if self._current_engine == "edge-tts"
-            else DEFAULT_VOICE_PIPER
+            else get_default_piper_voice()
         )
 
         speed = float(saved.get("speed", SPEED_DEFAULT))

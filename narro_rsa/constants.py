@@ -73,4 +73,26 @@ SPEED_MAX: float = 4.0
 # ---------------------------------------------------------------------------
 DEFAULT_VOICE_EDGE: str = "pt-BR-FranciscaNeural"
 DEFAULT_VOICE_PIPER: str = "pt_BR-cadu-medium"
+DEFAULT_ENGINE: str = "piper"
 VALID_ENGINES: tuple[str, ...] = ("edge-tts", "piper")
+
+
+def get_default_piper_voice() -> str:
+    """Retorna a voz padrão do Piper disponível ou preferencial.
+
+    Verifica se pt_BR-faber-medium ou pt_BR-cadu-medium existem em PIPER_VOICES_DIR.
+    Se nenhuma das duas existir, busca qualquer arquivo .onnx presente na pasta e retorna seu stem.
+    Se a pasta estiver vazia ou não existir, retorna DEFAULT_VOICE_PIPER ("pt_BR-cadu-medium").
+    """
+    if os.path.isdir(PIPER_VOICES_DIR):
+        for candidate in ("pt_BR-faber-medium", "pt_BR-cadu-medium"):
+            if os.path.exists(os.path.join(PIPER_VOICES_DIR, f"{candidate}.onnx")) or os.path.exists(os.path.join(PIPER_VOICES_DIR, candidate)):
+                return candidate
+        try:
+            onnx_files = sorted([f for f in os.listdir(PIPER_VOICES_DIR) if f.endswith(".onnx")])
+            if onnx_files:
+                return os.path.splitext(onnx_files[0])[0]
+        except OSError:
+            pass
+    return DEFAULT_VOICE_PIPER
+

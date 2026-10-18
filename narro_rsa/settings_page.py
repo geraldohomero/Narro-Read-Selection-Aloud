@@ -13,7 +13,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Gdk, GLib, Gtk, Adw
 
-from narro_rsa.constants import CONFIG_DIR, EDGE_VOICES_CACHE, PIPER_VOICES_DIR
+from narro_rsa.constants import CONFIG_DIR, DEFAULT_ENGINE, EDGE_VOICES_CACHE, PIPER_VOICES_DIR
 from narro_rsa.mpv_control import send_mpv_command
 from narro_rsa.settings import load_settings, save_settings
 from narro_rsa.translations import _
@@ -64,9 +64,9 @@ class SettingsPage(Adw.NavigationPage):
 
         # Carrega preferências salvas
         self.settings = load_settings()
-        self.current_engine = self.settings.get("engine", "edge-tts")
+        self.current_engine = self.settings.get("engine", DEFAULT_ENGINE)
         if self.current_engine not in ("edge-tts", "piper"):
-            self.current_engine = "edge-tts"
+            self.current_engine = DEFAULT_ENGINE
 
         self.current_voice = self.settings.get("voice", None)
         self.current_speed = float(self.settings.get("speed", 1.0))
@@ -92,7 +92,7 @@ class SettingsPage(Adw.NavigationPage):
 
         # Define estado inicial do mecanismo
         self._is_initializing_combos = True
-        self.engine_combo.set_selected(0 if self.current_engine == "edge-tts" else 1)
+        self.engine_combo.set_selected(0 if self.current_engine == "piper" else 1)
         
         theme_idx = 0
         if self.current_theme == "dark":
@@ -172,7 +172,7 @@ class SettingsPage(Adw.NavigationPage):
 
         # 1. Mecanismo (Engine)
         self.engine_row = Adw.ComboRow()
-        self.engine_row.set_model(Gtk.StringList.new(["Edge TTS (Online)", "Piper TTS (Offline)"]))
+        self.engine_row.set_model(Gtk.StringList.new(["Piper TTS (Offline)", "Edge TTS (Online)"]))
         self.group_basic.add(self.engine_row)
         self.engine_combo = self.engine_row
 
@@ -328,23 +328,30 @@ class SettingsPage(Adw.NavigationPage):
             lbl.set_valign(Gtk.Align.CENTER)
             return lbl
 
+        prefix = "flatpak run com.github.geraldohomero.NarroRsa"
+        try:
+            from main_window import get_shortcut_command_prefix
+            prefix = get_shortcut_command_prefix()
+        except Exception:
+            pass
+
         self.shortcut_row_primary = Adw.ActionRow()
-        self.shortcut_row_primary.set_subtitle("flatpak run com.github.geraldohomero.NarroRsa --primary")
+        self.shortcut_row_primary.set_subtitle(f"{prefix} --primary")
         self.shortcut_row_primary.add_suffix(_make_key_badge("<Control>backslash"))
         self.group_shortcuts.add(self.shortcut_row_primary)
 
         self.shortcut_row_clipboard = Adw.ActionRow()
-        self.shortcut_row_clipboard.set_subtitle("flatpak run com.github.geraldohomero.NarroRsa --play")
+        self.shortcut_row_clipboard.set_subtitle(f"{prefix} --play")
         self.shortcut_row_clipboard.add_suffix(_make_key_badge("<Super><Alt>l"))
         self.group_shortcuts.add(self.shortcut_row_clipboard)
 
         self.shortcut_row_pause = Adw.ActionRow()
-        self.shortcut_row_pause.set_subtitle("flatpak run com.github.geraldohomero.NarroRsa --pause")
+        self.shortcut_row_pause.set_subtitle(f"{prefix} --pause")
         self.shortcut_row_pause.add_suffix(_make_key_badge("<Super><Alt>j"))
         self.group_shortcuts.add(self.shortcut_row_pause)
 
         self.shortcut_row_stop = Adw.ActionRow()
-        self.shortcut_row_stop.set_subtitle("flatpak run com.github.geraldohomero.NarroRsa --stop")
+        self.shortcut_row_stop.set_subtitle(f"{prefix} --stop")
         self.shortcut_row_stop.add_suffix(_make_key_badge("<Super><Alt>k"))
         self.group_shortcuts.add(self.shortcut_row_stop)
 
@@ -552,7 +559,7 @@ class SettingsPage(Adw.NavigationPage):
         if self._is_initializing_combos:
             return
         selected = combo.get_selected()
-        new_engine = "edge-tts" if selected == 0 else "piper"
+        new_engine = "piper" if selected == 0 else "edge-tts"
         if new_engine == self.current_engine:
             return
 

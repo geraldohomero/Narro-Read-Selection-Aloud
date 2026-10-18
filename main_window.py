@@ -5,6 +5,7 @@ Narro-RSA — Janela Principal GTK 4 unificada com páginas Stack
 
 from __future__ import annotations
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -24,9 +25,11 @@ from narro_rsa.constants import (
     LOCKFILE,
     TMP_TEXT_FILE,
     LAST_READ_FILE,
+    DEFAULT_ENGINE,
     DEFAULT_VOICE_EDGE,
     DEFAULT_VOICE_PIPER,
     SPEED_DEFAULT,
+    get_default_piper_voice,
 )
 from narro_rsa.settings import load_settings, save_settings
 from narro_rsa.mpv_control import kill_mpv, send_mpv_command, is_mpv_active
@@ -286,6 +289,29 @@ class NarroApp(Adw.Application):
             win.show_settings_page()
 
 
+def get_shortcut_command_prefix() -> str:
+    """Retorna o prefixo do comando para configurar os atalhos de teclado do GNOME."""
+    if os.path.exists("/.flatpak-info"):
+        return "flatpak run com.github.geraldohomero.NarroRsa"
+
+    try:
+        res = subprocess.run(
+            ["flatpak", "info", "com.github.geraldohomero.NarroRsa"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        )
+        if res.returncode == 0:
+            return "flatpak run com.github.geraldohomero.NarroRsa"
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+    if shutil.which("narro-rsa"):
+        return "narro-rsa"
+
+    return f"{sys.executable} {os.path.abspath(__file__)}"
+
+
 def _run_gsettings_cmd(args: list[str]) -> str:
     """Executa um comando gsettings no host ou localmente."""
     gsettings_cmd = "/usr/bin/gsettings"
@@ -294,8 +320,12 @@ def _run_gsettings_cmd(args: list[str]) -> str:
     else:
         bin_path = gsettings_cmd if os.path.exists(gsettings_cmd) else "gsettings"
         cmd = [bin_path] + args
+    env = os.environ.copy()
+    for var in ("DBUS_SESSION_BUS_ADDRESS", "DISPLAY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR"):
+        if var in os.environ:
+            env[var] = os.environ[var]
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=5, env=env)
         if res.returncode != 0:
             return ""
         return res.stdout.strip()
@@ -312,6 +342,31 @@ def configure_gnome_shortcuts(force: bool = False) -> bool:
     """
     import re
 
+    prefix = get_shortcut_command_prefix()
+    tag = " [Flatpak]" if "flatpak" in prefix else ""
+    desired_shortcuts = [
+        {
+            "name": f"Leitor TTS (Narro){tag}",
+            "command": f"{prefix} --play",
+            "binding": "<Super><Alt>l",
+        },
+        {
+            "name": f"Leitor TTS (Narro) [Ctrl+\\]{tag}",
+            "command": f"{prefix} --primary",
+            "binding": "<Control>backslash",
+        },
+        {
+            "name": f"Pausar leitura TTS (Narro){tag}",
+            "command": f"{prefix} --pause",
+            "binding": "<Super><Alt>j",
+        },
+        {
+            "name": f"Parar leitura TTS (Narro){tag}",
+            "command": f"{prefix} --stop",
+            "binding": "<Super><Alt>k",
+        },
+    ]
+
     bindings_str = _run_gsettings_cmd(["get", "org.gnome.settings-daemon.plugins.media-keys", "custom-keybindings"])
     if not bindings_str and bindings_str != "@as []":
         print("Não foi possível acessar as configurações de atalhos do GNOME.")
@@ -322,43 +377,23 @@ def configure_gnome_shortcuts(force: bool = False) -> bool:
     else:
         current_bindings = re.findall(r"'(.*?)'", bindings_str)
 
-    desired_shortcuts = [
-        {
-            "name": "Leitor TTS (Narro) [Flatpak]",
-            "command": "flatpak run com.github.geraldohomero.NarroRsa --play",
-            "binding": "<Super><Alt>l"
-        },
-        {
-            "name": "Leitor TTS (Narro) [Ctrl+\\] [Flatpak]",
-            "command": "flatpak run com.github.geraldohomero.NarroRsa --primary",
-            "binding": "<Control>backslash"
-        },
-        {
-            "name": "Pausar leitura TTS (Narro) [Flatpak]",
-            "command": "flatpak run com.github.geraldohomero.NarroRsa --pause",
-            "binding": "<Super><Alt>j"
-        },
-        {
-            "name": "Parar leitura TTS (Narro) [Flatpak]",
-            "command": "flatpak run com.github.geraldohomero.NarroRsa --stop",
-            "binding": "<Super><Alt>k"
-        }
-    ]
-
     # Se não for forçado, verifica se todos os atalhos já estão presentes e corretos
     if not force:
-        existing_commands = {}
+        existing_shortcuts = []
         for path in current_bindings:
             schema = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{path}"
+            name = _run_gsettings_cmd(["get", schema, "name"]).strip("'\" ")
             cmd = _run_gsettings_cmd(["get", schema, "command"]).strip("'\" ")
             binding = _run_gsettings_cmd(["get", schema, "binding"]).strip("'\" ")
-            if cmd:
-                existing_commands[cmd] = binding
+            existing_shortcuts.append({"name": name, "command": cmd, "binding": binding})
 
         all_present = True
         for ds in desired_shortcuts:
-            cmd = ds["command"]
-            if cmd not in existing_commands or existing_commands[cmd] != ds["binding"]:
+            matched = any(
+                es["name"] == ds["name"] and es["command"] == ds["command"] and es["binding"] == ds["binding"]
+                for es in existing_shortcuts
+            )
+            if not matched:
                 all_present = False
                 break
         if all_present:
@@ -370,7 +405,7 @@ def configure_gnome_shortcuts(force: bool = False) -> bool:
         schema = f"org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:{path}"
         name = _run_gsettings_cmd(["get", schema, "name"]).strip("'\" ")
         cmd = _run_gsettings_cmd(["get", schema, "command"]).strip("'\" ")
-        if "Narro" in name or "com.github.geraldohomero.NarroRsa" in cmd:
+        if "Narro" in name or "com.github.geraldohomero.NarroRsa" in cmd or "narro-rsa" in cmd:
             continue
         new_bindings.append(path)
 
@@ -395,7 +430,7 @@ def configure_gnome_shortcuts(force: bool = False) -> bool:
         _run_gsettings_cmd(["set", schema, "command", shortcut["command"]])
         _run_gsettings_cmd(["set", schema, "binding", shortcut["binding"]])
 
-    print("Atalhos do GNOME configurados com sucesso para usar o Flatpak!")
+    print("Atalhos do GNOME configurados com sucesso!")
     return True
 
 
@@ -445,8 +480,8 @@ def main():
             pass
 
         settings = load_settings()
-        engine = settings.get("engine", "edge-tts")
-        default_voice = DEFAULT_VOICE_EDGE if engine == "edge-tts" else DEFAULT_VOICE_PIPER
+        engine = settings.get("engine", DEFAULT_ENGINE)
+        default_voice = DEFAULT_VOICE_EDGE if engine == "edge-tts" else get_default_piper_voice()
         voice = settings.get("voice") or default_voice
         speed = float(settings.get("speed", SPEED_DEFAULT))
         

@@ -18,9 +18,11 @@ from narro_rsa.constants import (
     TMP_TEXT_FILE,
     LAST_READ_FILE,
     MPV_SOCKET,
+    DEFAULT_ENGINE,
     DEFAULT_VOICE_EDGE,
     DEFAULT_VOICE_PIPER,
     SPEED_DEFAULT,
+    get_default_piper_voice,
 )
 from narro_rsa.settings import load_settings, save_settings
 from narro_rsa.mpv_control import kill_mpv, send_mpv_command
@@ -144,8 +146,8 @@ class ReaderPage(Gtk.Box):
     def reload_ui_settings(self):
         """Carrega e sincroniza as preferências atuais na UI."""
         settings = load_settings()
-        engine = settings.get("engine", "edge-tts")
-        default_voice = DEFAULT_VOICE_EDGE if engine == "edge-tts" else DEFAULT_VOICE_PIPER
+        engine = settings.get("engine", DEFAULT_ENGINE)
+        default_voice = DEFAULT_VOICE_EDGE if engine == "edge-tts" else get_default_piper_voice()
         voice = settings.get("voice") or default_voice
         speed = float(settings.get("speed", SPEED_DEFAULT))
 
@@ -350,8 +352,8 @@ class ReaderPage(Gtk.Box):
             
             kill_mpv()
             settings = load_settings()
-            engine = settings.get("engine", "edge-tts")
-            default_voice = DEFAULT_VOICE_EDGE if engine == "edge-tts" else DEFAULT_VOICE_PIPER
+            engine = settings.get("engine", DEFAULT_ENGINE)
+            default_voice = DEFAULT_VOICE_EDGE if engine == "edge-tts" else get_default_piper_voice()
             voice = settings.get("voice") or default_voice
             speed = float(settings.get("speed", SPEED_DEFAULT))
             
