@@ -29,6 +29,14 @@ from narro_rsa.mpv_control import kill_mpv, send_mpv_command
 from narro_rsa.tts_engine import EngineType, TTSRequest, generate_audio
 from narro_rsa.subprocess_helper import popen_command, check_pid_active, check_and_start_daemon
 from narro_rsa.translations import _
+from narro_rsa.voice_catalog import (
+    get_downloaded_piper_voices,
+    get_top_edge_quick_voices,
+    fetch_piper_catalog,
+    fetch_edge_voices,
+    LANGUAGE_NAMES_MAP,
+    BASE_LANGUAGES,
+)
 
 
 class ReaderPage(Gtk.Box):
@@ -37,6 +45,8 @@ class ReaderPage(Gtk.Box):
         self.main_window = main_window
         self._mpv_process = None
         self._local_thread = None
+        self.quick_voice_codes: list[str] = []
+        self._is_populating_quick_voices: bool = False
 
         self.set_margin_start(16)
         self.set_margin_end(16)
@@ -96,10 +106,37 @@ class ReaderPage(Gtk.Box):
         if initial_text == _("no_text"):
             self.load_clipboard_async()
 
+        # Contêiner de Seleção Rápida de Mecanismo e Voz
+        self.quick_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        self.quick_box.set_hexpand(True)
+        self.quick_box.add_css_class("active-voice-badge")
+
+        self.quick_engine_lbl = Gtk.Label(label=_("quick_engine_label"))
+        self.quick_engine_lbl.set_halign(Gtk.Align.START)
+        self.quick_box.append(self.quick_engine_lbl)
+
+        self.quick_engine_dropdown = Gtk.DropDown(
+            model=Gtk.StringList.new(["Piper TTS (Offline)", "Edge TTS (Online)"])
+        )
+        self.quick_box.append(self.quick_engine_dropdown)
+
+        self.quick_voice_lbl = Gtk.Label(label=_("quick_voice_label"))
+        self.quick_voice_lbl.set_halign(Gtk.Align.START)
+        self.quick_box.append(self.quick_voice_lbl)
+
+        self.quick_voice_dropdown = Gtk.DropDown()
+        self.quick_voice_dropdown.set_enable_search(True)
+        self.quick_voice_dropdown.set_hexpand(True)
+        self.quick_box.append(self.quick_voice_dropdown)
+
+        self.quick_engine_dropdown.connect("notify::selected", self._on_quick_engine_changed)
+        self.quick_voice_dropdown.connect("notify::selected", self._on_quick_voice_changed)
+
+        self.append(self.quick_box)
+
         # Rótulo da Voz Ativa
         self.active_voice_lbl = Gtk.Label()
         self.active_voice_lbl.set_halign(Gtk.Align.START)
-        self.active_voice_lbl.add_css_class("active-voice-badge")
         self.append(self.active_voice_lbl)
 
         # Seção de Controle de Velocidade
@@ -155,6 +192,18 @@ class ReaderPage(Gtk.Box):
         self.active_voice_lbl.set_markup(_("voice_active", voice=voice, engine="Online" if engine == "edge-tts" else "Offline"))
         self.speed_lbl.set_text(_("speed"))
 
+        if hasattr(self, "quick_engine_lbl"):
+            self.quick_engine_lbl.set_text(_("quick_engine_label"))
+        if hasattr(self, "quick_voice_lbl"):
+            self.quick_voice_lbl.set_text(_("quick_voice_label"))
+
+        if hasattr(self, "quick_engine_dropdown"):
+            self._is_populating_quick_voices = True
+            self.quick_engine_dropdown.set_selected(0 if engine == "piper" else 1)
+            self._is_populating_quick_voices = False
+
+        self._populate_quick_voices()
+
         self._is_updating_speed = True
         self.speed_scale.set_value(speed)
         self.speed_value_lbl.set_markup(f"<b>{speed:.2f}x</b>")
@@ -163,6 +212,166 @@ class ReaderPage(Gtk.Box):
         self.play_btn.set_label(_("play"))
         self.pause_btn.set_label(_("pause"))
         self.stop_btn.set_label(_("stop"))
+
+    def _format_piper_quick_label(
+        self, voice_code: str, display_name: str, piper_catalog: dict | None = None
+    ) -> str:
+        lang_code = voice_code.split("-")[0] if "-" in voice_code else voice_code
+        lang_name = ""
+        for code in (lang_code, lang_code.replace("-", "_"), lang_code.replace("_", "-")):
+            if code in LANGUAGE_NAMES_MAP:
+                lang_name = LANGUAGE_NAMES_MAP[code].split(" — ")[0].strip()
+                if "[" in lang_name:
+                    lang_name = lang_name.split("[")[0].strip()
+                break
+        if not lang_name and piper_catalog and voice_code in piper_catalog:
+            lang_info = piper_catalog[voice_code].get("language", {})
+            native = lang_info.get("name_native")
+            country = lang_info.get("country_english")
+            eng = lang_info.get("name_english")
+            if native and country:
+                lang_name = f"{native} ({country})"
+            elif eng and country:
+                lang_name = f"{eng} ({country})"
+            elif eng:
+                lang_name = eng
+        if not lang_name:
+            norm = lang_code.replace("_", "-")
+            prefix = norm.split("-")[0].lower()
+            if prefix in BASE_LANGUAGES:
+                pt_acc = BASE_LANGUAGES[prefix][0]
+                region = norm.split("-")[1].upper() if "-" in norm else ""
+                lang_name = f"{pt_acc} ({region})" if region else pt_acc
+            else:
+                lang_name = lang_code
+        return f"{lang_name} — {display_name}"
+
+    def _populate_quick_voices(self):
+        """Preenche o dropdown de seleção rápida de vozes conforme o mecanismo ativo."""
+        self._is_populating_quick_voices = True
+        try:
+            settings = load_settings()
+            engine = settings.get("engine", DEFAULT_ENGINE)
+            current_voice = settings.get("voice")
+
+            if engine == "piper":
+                piper_cat = fetch_piper_catalog()
+                downloaded = get_downloaded_piper_voices(piper_cat)
+                if not downloaded:
+                    self.quick_voice_codes = []
+                    self.quick_voice_dropdown.set_model(
+                        Gtk.StringList.new([_("no_piper_voices_downloaded")])
+                    )
+                    self.quick_voice_dropdown.set_sensitive(False)
+                else:
+                    codes = []
+                    labels = []
+                    for code, disp in downloaded:
+                        lbl = self._format_piper_quick_label(code, disp, piper_cat)
+                        codes.append(code)
+                        labels.append(lbl)
+                    self.quick_voice_codes = codes
+                    self.quick_voice_dropdown.set_model(Gtk.StringList.new(labels))
+                    self.quick_voice_dropdown.set_sensitive(True)
+
+                    sel_idx = 0
+                    if current_voice and current_voice in codes:
+                        sel_idx = codes.index(current_voice)
+                    self.quick_voice_dropdown.set_selected(sel_idx)
+            else:
+                edge_voices = fetch_edge_voices()
+                top_voices = list(get_top_edge_quick_voices(edge_voices))
+                top_codes = [c for c, _ in top_voices]
+
+                if current_voice and current_voice not in top_codes:
+                    custom_disp = current_voice
+                    if edge_voices:
+                        for ev in edge_voices:
+                            if isinstance(ev, dict) and ev.get("ShortName") == current_voice:
+                                custom_disp = ev.get("FriendlyName") or current_voice
+                                break
+                    top_voices.insert(0, (current_voice, custom_disp))
+
+                codes = [c for c, _ in top_voices]
+                labels = [d for _, d in top_voices]
+                self.quick_voice_codes = codes
+                self.quick_voice_dropdown.set_model(Gtk.StringList.new(labels))
+                self.quick_voice_dropdown.set_sensitive(True)
+
+                sel_idx = 0
+                if current_voice and current_voice in codes:
+                    sel_idx = codes.index(current_voice)
+                self.quick_voice_dropdown.set_selected(sel_idx)
+        finally:
+            self._is_populating_quick_voices = False
+
+    def _on_quick_engine_changed(self, dropdown, _param):
+        if self._is_populating_quick_voices:
+            return
+        idx = dropdown.get_selected()
+        new_engine = "piper" if idx == 0 else "edge-tts"
+        settings = load_settings()
+        curr_engine = settings.get("engine", DEFAULT_ENGINE)
+        if new_engine == curr_engine:
+            return
+
+        new_voice = None
+        if new_engine == "piper":
+            piper_cat = fetch_piper_catalog()
+            downloaded = get_downloaded_piper_voices(piper_cat)
+            if downloaded:
+                down_codes = [c for c, _ in downloaded]
+                def_p = get_default_piper_voice()
+                new_voice = def_p if def_p in down_codes else down_codes[0]
+            else:
+                new_voice = get_default_piper_voice()
+        else:
+            top_voices = get_top_edge_quick_voices()
+            new_voice = DEFAULT_VOICE_EDGE if DEFAULT_VOICE_EDGE else (top_voices[0][0] if top_voices else None)
+
+        save_settings(engine=new_engine, voice=new_voice)
+        self.active_voice_lbl.set_markup(
+            _("voice_active", voice=new_voice or "", engine="Online" if new_engine == "edge-tts" else "Offline")
+        )
+
+        if hasattr(self, "main_window") and hasattr(self.main_window, "settings_page") and self.main_window.settings_page:
+            sp = self.main_window.settings_page
+            sp.current_engine = new_engine
+            sp.current_voice = new_voice
+            if hasattr(sp, "engine_combo"):
+                sp._is_initializing_combos = True
+                sp.engine_combo.set_selected(0 if new_engine == "piper" else 1)
+                sp._is_initializing_combos = False
+            if hasattr(sp, "_populate_languages"):
+                sp._populate_languages()
+                sp._select_initial_language()
+                sp._populate_voices()
+                sp._update_buttons_state()
+                sp._update_current_selection_label()
+
+        self._populate_quick_voices()
+
+    def _on_quick_voice_changed(self, dropdown, _param):
+        if self._is_populating_quick_voices:
+            return
+        idx = dropdown.get_selected()
+        if 0 <= idx < len(self.quick_voice_codes):
+            new_voice = self.quick_voice_codes[idx]
+            settings = load_settings()
+            curr_voice = settings.get("voice")
+            if new_voice != curr_voice:
+                engine = settings.get("engine", DEFAULT_ENGINE)
+                save_settings(voice=new_voice)
+                self.active_voice_lbl.set_markup(
+                    _("voice_active", voice=new_voice, engine="Online" if engine == "edge-tts" else "Offline")
+                )
+                if hasattr(self, "main_window") and hasattr(self.main_window, "settings_page") and self.main_window.settings_page:
+                    sp = self.main_window.settings_page
+                    sp.current_voice = new_voice
+                    if hasattr(sp, "_select_current_voice_in_treeview"):
+                        sp._select_current_voice_in_treeview()
+                    if hasattr(sp, "_update_current_selection_label"):
+                        sp._update_current_selection_label()
 
     def _on_speed_scale_changed(self, scale):
         """Salva a nova velocidade e atualiza em tempo real se mpv estiver rodando."""

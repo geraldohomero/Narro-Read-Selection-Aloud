@@ -81,6 +81,9 @@ TRANSLATIONS = {
         "btn_reconfigure_shortcuts": "Configure Shortcuts in GNOME",
         "shortcuts_configured_toast": "GNOME keyboard shortcuts configured automatically!",
         "shortcuts_configured_success": "GNOME keyboard shortcuts updated successfully!",
+        "quick_engine_label": "Engine:",
+        "quick_voice_label": "Voice:",
+        "no_piper_voices_downloaded": "No offline voices downloaded",
     },
     "pt_BR": {
         "title": "Narro-RSA",
@@ -159,6 +162,9 @@ TRANSLATIONS = {
         "btn_reconfigure_shortcuts": "Configurar Atalhos no GNOME",
         "shortcuts_configured_toast": "Atalhos de teclado do GNOME configurados automaticamente!",
         "shortcuts_configured_success": "Atalhos de teclado do GNOME atualizados com sucesso!",
+        "quick_engine_label": "Mecanismo:",
+        "quick_voice_label": "Voz:",
+        "no_piper_voices_downloaded": "Nenhuma voz offline baixada",
     },
     "zh_CN": {
         "title": "Narro-RSA",
@@ -237,6 +243,9 @@ TRANSLATIONS = {
         "btn_reconfigure_shortcuts": "在 GNOME 中配置快捷键",
         "shortcuts_configured_toast": "GNOME 快捷键已自动配置！",
         "shortcuts_configured_success": "GNOME 快捷键更新成功！",
+        "quick_engine_label": "引擎:",
+        "quick_voice_label": "语音:",
+        "no_piper_voices_downloaded": "未下载离线语音",
     }
 }
 
