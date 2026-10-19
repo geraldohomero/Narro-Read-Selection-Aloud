@@ -10,7 +10,13 @@ Leitor de texto em voz alta com suporte a Edge TTS (online) e Piper TTS (offline
 
 Selecione texto em qualquer aplicativo, copie com Ctrl+C, e use um atalho de teclado para abrir o player TTS — com controles de Play/Pause/Stop, seleção de motor/idioma/voz, controle de velocidade e visualizador de histórico de leitura.
 
-![image-hero](assets/image-hero.png)
+Outras aplicações Narro incluem [NarroPDF](https://github.com/geraldohomero/NarroPDF)
+
+![application](assets/desktop-view-main.png)
+
+---
+
+![application](assets/desktop-view-settings.png)
 
 ## Funcionalidades
 

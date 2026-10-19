@@ -10,7 +10,13 @@ Text-to-speech (TTS) reader with support for Edge TTS (online) and Piper TTS (of
 
 Select text in any application, copy it, and use a keyboard shortcut to open the TTS player — featuring Play/Pause/Stop controls, engine/language/voice selection, speed control, and a visual history viewer.
 
-![image-hero](assets/image-hero.png)
+Other Narro applications include [NarroPDF](https://github.com/geraldohomero/NarroPDF)
+
+![application](assets/desktop-view-main.png)
+
+---
+
+![application](assets/desktop-view-settings.png)
 
 ## Features
 

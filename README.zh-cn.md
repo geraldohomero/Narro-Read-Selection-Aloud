@@ -10,7 +10,13 @@
 
 在任何应用程序中选择文本，使用 Ctrl+C 复制，然后使用键盘快捷键打开 TTS 播放器 —— 包含播放/暂停/停止控制、引擎/语言/声音选择、语速控制以及历史文本查看器。
 
-![image-hero](assets/image-hero.png)
+其他 Narro 系列应用包括 [NarroPDF](https://github.com/geraldohomero/NarroPDF)
+
+![application](assets/desktop-view-main.png)
+
+---
+
+![application](assets/desktop-view-settings.png)
 
 ## 功能特性
 
